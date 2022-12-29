@@ -180,6 +180,7 @@ void print_log_row(log_row_t* log_row) {
 // converts 'state' field to string (for printing)
 char* state_to_s(state_t state) {
 	switch (state) {
+		case WAITING_TO_START: return "WAITING_TO_START";
 		case SYN_RECEIVED: return "SYN_RECEIVED";
 		case SYN_ACK_RECEIVED: return "SYN_ACK_RECEIVED";
 		case ESTABLISHED: return "ESTABLISHED";
@@ -191,11 +192,37 @@ char* state_to_s(state_t state) {
 }
 
 
+// converts 'tcp_conn_type_t' enum to string (for printing)
+char* tcp_conn_type_to_s(tcp_conn_type_t type) {
+	switch (type) {
+	case TCP_CONN_HTTP: return "HTTP";
+	case TCP_CONN_FTP: return "FTP";
+	case TCP_CONN_OTHER: return "OTHER";
+	}
+	print_error_message_and_exit("There is some type which isn't valid");
+	return ""; // we should never reach this
+}
+
+
+void print_metadata(conn_entry_metadata_t metadata) {
+	printf("%s\t", tcp_conn_type_to_s(metadata.type));
+	if (metadata.type == TCP_CONN_OTHER) {
+		printf("\t---\t\t---\t\t---\t\t---\t\t---");
+	} else {
+		print_ip(metadata.client_ip);
+		printf("\t%hu\t", ntohs(metadata.client_port));
+		print_ip(metadata.server_ip);
+		printf("\t%hu\t%hu", ntohs(metadata.server_port), ntohs(metadata.forged_client_port));
+	}
+}
+
 // prints entire connection table entry, as needed for "show_conns" command
 void print_conn_entry(conn_entry_t* conn_entry) {
 	print_ip(conn_entry->src_ip);
-	printf("\t\t%hu\t\t", ntohs(conn_entry->src_port));
+	printf("\t%hu\t", ntohs(conn_entry->src_port));
 	print_ip(conn_entry->dst_ip);
-	printf("\t\t%hu\t\t%s\n", ntohs(conn_entry->dst_port), state_to_s(conn_entry->state));
+	printf("\t%hu\t%s\t", ntohs(conn_entry->dst_port), state_to_s(conn_entry->state));
+	print_metadata(conn_entry->metadata);
+	printf("\n");
 }
 

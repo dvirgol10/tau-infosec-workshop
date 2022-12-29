@@ -46,7 +46,7 @@ int is_loopback(struct sk_buff* skb);
 int is_xmas(struct sk_buff* skb);
 
 // searches a matching rule for the packet, writes it in the log and returns the verdict for the packet
-int match_rules(struct sk_buff* skb, direction_t pkt_direction);
+verdict_t match_rules(struct sk_buff* skb, direction_t pkt_direction, int to_update_conn_tab_and_log);
 
 
 #endif // _FW_RULES_H_

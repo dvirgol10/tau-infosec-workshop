@@ -27,6 +27,8 @@ ssize_t load_rules(struct device *dev, struct device_attribute *attr, const char
 ssize_t show_rules(struct device *dev, struct device_attribute *attr, char *buf);
 ssize_t reset_logs(struct device *dev, struct device_attribute *attr, const char *buf, size_t count);
 ssize_t show_conns(struct device *dev, struct device_attribute *attr, char *buf);
+ssize_t show_metadata(struct device *dev, struct device_attribute *attr, char *buf);
+ssize_t update_metadata(struct device *dev, struct device_attribute *attr, const char *buf, size_t count);
 void cleanup(void);
 
 static struct file_operations fops = {
@@ -42,10 +44,13 @@ static struct nf_hook_ops local_out_nfho;
 static DEVICE_ATTR(rules, S_IRUSR | S_IRGRP | S_IWUSR | S_IWGRP , show_rules, load_rules);
 static DEVICE_ATTR(reset, S_IWUSR | S_IWGRP , NULL, reset_logs);
 static DEVICE_ATTR(conns, S_IRUSR | S_IRGRP , show_conns, NULL);
+static DEVICE_ATTR(proxy, S_IRUSR | S_IRGRP | S_IWUSR | S_IWGRP , show_metadata, update_metadata);
+
 
 
 unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
-
+	verdict_t verdict;
+	printk(KERN_INFO "I'm int local-out hook\n");
 	if (skb->protocol != htons(ETH_P_IP)) {
 		return NF_ACCEPT; // we accept any non-IPv4 packet without logging it
 	}
@@ -53,10 +58,10 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 	if (ip_hdr(skb)->protocol == PROT_TCP) {
 		__be16 my_src_port = tcp_hdr(skb)->source;
 		__be16 my_dst_port = tcp_hdr(skb)->dest;
-		int from_http_client = (ntohs(my_dst_port) == HTTP_PORT);
-		int from_http_server = (ntohs(my_src_port) == HTTP_MITM_PORT);
-		int from_ftp_client = (ntohs(my_dst_port) == FTP_PORT);
-		int from_ftp_server = (ntohs(my_src_port) == FTP_MITM_PORT);
+		int from_http_client = my_dst_port == HTTP_PORT_BE;
+		int from_http_server = my_src_port == HTTP_MITM_PORT_BE;
+		int from_ftp_client = my_dst_port == FTP_PORT_BE;
+		int from_ftp_server = my_src_port == FTP_MITM_PORT_BE;
 		conn_entry_metadata_t* p_metadata = retrieve_matching_metadata_of_packet(skb);
 
 		switch (p_metadata->type) {
@@ -67,9 +72,11 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 			return NF_ACCEPT;
 		}
 
+		verdict = match_conn_entries(skb); // we need to add a state of before the first SYN
+		printk(KERN_INFO "Now we forge the local out packet\n");
 		forge_lo_tcp_packet(skb, p_metadata, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
 
-		return match_conn_entries(skb); // we need to add a state of before the first SYN
+		return verdict.action;
 	}
 
 	return NF_ACCEPT;
@@ -93,10 +100,9 @@ void unregister_lo_hook(void) {
 
 // this is the hook function, gets a packet in the "pre routing" hook, documents it in the log if needed, and returns the verdict for the packet
 unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
-	__u8 action;
-	reason_t reason;
 	struct iphdr *hdr;
 	direction_t pkt_direction;
+	verdict_t verdict;
 	// determine the direction of the packet
 	if (!strcmp(state->in->name, IN_NET_DEVICE_NAME)) {
 		pkt_direction = DIRECTION_OUT;
@@ -118,39 +124,40 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		__be16 original_src_port = tcp_hdr(skb)->source;
 		__be16 original_dst_port = tcp_hdr(skb)->dest;
 		__be32 original_src_ip = ip_hdr(skb)->saddr;
-		int from_http_client = (ntohs(original_dst_port) == HTTP_PORT);
-		int from_http_server = (ntohs(original_src_port) == HTTP_PORT);
-		int from_ftp_client = (ntohs(original_dst_port) == FTP_PORT);
-		int from_ftp_server = (ntohs(original_src_port) == FTP_PORT);
+		int from_http_client = original_dst_port == HTTP_PORT_BE;
+		int from_http_server = original_src_port == HTTP_PORT_BE;
+		int from_ftp_client = original_dst_port == FTP_PORT_BE;
+		int from_ftp_server = original_src_port == FTP_PORT_BE;
 		conn_entry_metadata_t metadata;
 		
 		if (get_packet_ack(skb)) {
+			verdict = match_conn_entries(skb);
 			if (from_http_client || from_http_server || from_ftp_client || from_ftp_server) {
 				forge_pr_tcp_packet(skb, from_http_client, from_ftp_client);
 			}
-			return match_conn_entries(skb);
+			return verdict.action;
 		} else {
 			if (from_http_client || from_ftp_client) {
-				action = match_rules(skb, pkt_direction, 0);
-				if (action == NF_DROP) {
+				verdict = match_rules(skb, pkt_direction, 0);
+				if (verdict.action == NF_DROP) {
 					return NF_DROP;
 				} else {
 					metadata = create_conn_metadata(skb, original_src_ip, original_src_port, from_http_client, from_ftp_client);
 					forge_pr_tcp_packet(skb, from_http_client, from_ftp_client);
 					if (get_packet_syn(skb)) { // if this is a TCP packet we want to update the dynamic connection table appropriately
 						if (!update_conn_tab_with_new_connection(skb, metadata)) { // if the update has failed, meaning if there was already such connection between the endpoints
-							action = NF_DROP;
-							reason = REASON_ALREADY_HAS_CONN_ENTRY;
+							verdict.action = NF_DROP;
+							verdict.reason = REASON_ALREADY_HAS_CONN_ENTRY;
 						}
 					} else {
-						action = NF_DROP;
-						reason = REASON_ILLEGAL_VALUE;
+						verdict.action = NF_DROP;
+						verdict.reason = REASON_ILLEGAL_VALUE;
 					}
-					update_log(skb, reason, action); // update the log with the input packet			
-					return action;
+					update_log(skb, verdict.reason, verdict.action); // update the log with the input packet			
+					return verdict.action;
 				}
 			} else {
-				return match_rules(skb, pkt_direction, 1);
+				return match_rules(skb, pkt_direction, 1).action;
 			}
 		}
 	}
@@ -159,7 +166,7 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		return NF_ACCEPT;
 	}
 
-	return match_rules(skb, pkt_direction, 1);
+	return match_rules(skb, pkt_direction, 1).action;
 }
 
 // I used the following source: https://infosecwriteups.com/linux-kernel-communication-part-1-netfilter-hooks-15c07a5a5c4e
@@ -273,8 +280,52 @@ ssize_t show_conns(struct device *dev, struct device_attribute *attr, char *buf)
 }
 
 
+ssize_t show_metadata(struct device *dev, struct device_attribute *attr, char *buf) {
+	conn_entry_node *conn_node;
+	int i = 0;
+	list_for_each_entry(conn_node, &conn_tab, list) { // iterates through the connection table list to send the metadata entries to the user
+		if (conn_node->conn_entry.metadata.type != TCP_CONN_OTHER) {
+			memcpy(buf, &conn_node->conn_entry.metadata, sizeof(conn_entry_metadata_t));
+			buf += sizeof(conn_entry_metadata_t);
+			++i;
+		}
+	}
+	return i * sizeof(conn_entry_metadata_t);
+}
+
+
+ssize_t update_metadata(struct device *dev, struct device_attribute *attr, const char *buf, size_t count) {
+	conn_entry_node *conn_node;
+	conn_entry_t* p_conn_entry;
+	conn_entry_metadata_t metadata;
+	if (count != sizeof(conn_entry_metadata_t)) {
+		printk(KERN_INFO "Invalid metadata entry length");
+		return 0;
+	}
+
+	memcpy(&metadata, buf, sizeof(conn_entry_metadata_t));
+	list_for_each_entry(conn_node, &conn_tab, list) { // iterates through the connection table list to send the data to the user
+		p_conn_entry = &conn_node->conn_entry;
+		if ((metadata.type == p_conn_entry->metadata.type) &&
+			(metadata.client_ip == p_conn_entry->metadata.client_ip) &&
+			(metadata.client_port == p_conn_entry->metadata.client_port) &&
+			(metadata.server_ip == p_conn_entry->metadata.server_ip) &&
+			(metadata.server_port == p_conn_entry->metadata.server_port))
+		{
+			p_conn_entry->metadata = metadata;
+			if (p_conn_entry->dst_ip == p_conn_entry->metadata.server_ip) { // meaning that the entry is of our proxy and the server
+				p_conn_entry->src_port = metadata.forged_client_port;
+			}
+		}
+	}
+
+	return count;
+}
+
+
 // do the cleanup of the devices
 void cleanup(void) {
+	device_remove_file(conn_tab_device, (const struct device_attribute*) &dev_attr_proxy.attr); 
 	device_remove_file(conn_tab_device, (const struct device_attribute*) &dev_attr_conns.attr); 
 	device_remove_file(log_device, (const struct device_attribute*) &dev_attr_reset.attr); 
 	device_remove_file(rules_device, (const struct device_attribute*) &dev_attr_rules.attr); 
@@ -362,10 +413,30 @@ int __init init_module_firewall(void) {
 		return -1;
 	}
 
+	// create connection table device file attributes
+	if (device_create_file(conn_tab_device, (const struct device_attribute*) &dev_attr_proxy.attr)) {
+		device_remove_file(conn_tab_device, (const struct device_attribute*) &dev_attr_conns.attr); 
+		device_remove_file(log_device, (const struct device_attribute*) &dev_attr_reset.attr); 
+		device_remove_file(rules_device, (const struct device_attribute*) &dev_attr_rules.attr); 
+		device_destroy(fw_class, MKDEV(major_number, MINOR_RULES));
+		device_destroy(fw_class, MKDEV(major_number, MINOR_LOG));
+		device_destroy(fw_class, MKDEV(major_number, MINOR_CONN_TAB));
+		class_destroy(fw_class);
+		unregister_chrdev(major_number, DEVICE_NAME);
+		return -1;
+	}
+
 	// register hook
 	retval = register_pr_hook();
 	if (retval < 0) {
-		printk(KERN_INFO "Failed to register the hook");
+		printk(KERN_INFO "Failed to register the pr hook");
+		cleanup();
+		return retval;
+	}
+	retval = register_lo_hook();
+	if (retval < 0) {
+		printk(KERN_INFO "Failed to register the pr hook");
+		unregister_pr_hook();
 		cleanup();
 		return retval;
 	}
@@ -379,6 +450,7 @@ int __init init_module_firewall(void) {
 void __exit cleanup_module_firewall(void) {
 	// unregister hooks
 	unregister_pr_hook();
+	unregister_lo_hook();
 
 	free_log_list();
 	free_conn_tab();

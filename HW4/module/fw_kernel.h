@@ -12,6 +12,7 @@
 #include <linux/udp.h>
 #include <linux/errno.h>
 #include <linux/time.h>
+#include <net/tcp.h>
 
 
 // the protocols we will work with
@@ -52,17 +53,17 @@ typedef enum {
 #define PORT_ABOVE_1023		(1023)
 #define MAX_RULES			(50)
 #define RULE_TABLE_SIZE 	(MAX_RULES * sizeof(rule_t))
-#define HTTP_PORT			(80)
-#define FTP_PORT			(21)
-#define HTTP_MITM_PORT		(800)
-#define FTP_MITM_PORT		(210)
+#define HTTP_PORT_BE		(10752)		// 10752 is 42 in BE	//(20480)		// 20480 is 80 in BE
+#define FTP_PORT_BE			(5376)		// 5376 is 21 in BE
+#define HTTP_MITM_PORT_BE	(8195)		// 8195 is 800 in BE
+#define FTP_MITM_PORT_BE	(53760)		// 53760 is 210 in BE
 #define LOOPBACK_ADDR_BE	(16777343) 	// 16777343 is "127.0.0.1" in BE, 255 is "255.0.0.0" in BE
 
 // device minor numbers, for your convenience
 typedef enum {
 	MINOR_RULES    = 0,
 	MINOR_LOG      = 1,
-	MINOR_CONN_TAB = 2
+	MINOR_CONN_TAB = 2,
 } minor_t;
 
 typedef enum {
@@ -108,7 +109,13 @@ typedef struct {
 	unsigned int   	count;        	// counts this line's hits
 } log_row_t;
 
+typedef struct {
+	unsigned char  	action;
+	reason_t		reason;
+} verdict_t;
+
 typedef enum {
+	WAITING_TO_START,
 	SYN_RECEIVED,
 	SYN_ACK_RECEIVED,
 	ESTABLISHED,
@@ -116,6 +123,26 @@ typedef enum {
 	FIN_2_RECEIVED,
 	/* CLOSED */					// instead of having a "closed" state, we simply remove the connection entry from the dynamic table after receiving ACK for the last FIN
 } state_t;
+
+typedef enum {
+	TCP_CONN_HTTP 	= 0,
+	TCP_CONN_FTP	= 1,
+	TCP_CONN_OTHER	= 2,
+} tcp_conn_type_t;
+
+typedef struct {
+	tcp_conn_type_t type;
+	__be32 client_ip;
+	__be16 client_port;
+	__be32 server_ip;
+	__be16 server_port;
+	__be16 forged_client_port;
+
+	// struct ftp {
+		
+	// } ftp;
+
+} conn_entry_metadata_t;
 
 // connection table
 typedef struct {
@@ -127,26 +154,5 @@ typedef struct {
 	conn_entry_metadata_t 	metadata;
 } conn_entry_t;
 
-
-typedef enum {
-	TCP_CONN_HTTP,
-	TCP_CONN_FTP,
-	TCP_CONN_OTHER,
-} tcp_conn_type_t;
-
-
-typedef struct {
-	tcp_conn_type_t type;
-	__be32 client_ip;
-	__be16 client_port;
-	__be32 server_ip;
-	__be16 server_port;
-	__be16 forged_client_port;
-
-	struct ftp {
-		
-	} ftp;
-
-} conn_entry_metadata_t;
 
 #endif // _FW_H_

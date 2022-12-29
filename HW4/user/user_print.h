@@ -48,6 +48,10 @@ void print_log_row(log_row_t* log_row);
 
 char* state_to_s(state_t state);
 
+char* tcp_conn_type_to_s(tcp_conn_type_t type);
+
+void print_metadata(conn_entry_metadata_t metadata);
+
 void print_conn_entry(conn_entry_t* conn_entry);
 
 #endif // _USER_PRINT_H_

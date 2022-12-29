@@ -108,6 +108,7 @@ typedef struct {
 } log_row_t;
 
 typedef enum {
+	WAITING_TO_START,
 	SYN_RECEIVED,
 	SYN_ACK_RECEIVED,
 	ESTABLISHED,
@@ -116,14 +117,34 @@ typedef enum {
 	/* CLOSED */					// instead of having a "closed" state, we simply remove the connection entry from the dynamic table after receiving ACK for the last FIN
 } state_t;
 
+typedef enum {
+	TCP_CONN_HTTP 	= 0,
+	TCP_CONN_FTP	= 1,
+	TCP_CONN_OTHER	= 2,
+} tcp_conn_type_t;
+
+typedef struct {
+	tcp_conn_type_t type;
+	unsigned int  client_ip;
+	unsigned short client_port;
+	unsigned int  server_ip;
+	unsigned short server_port;
+	unsigned short forged_client_port;
+
+	// struct ftp {
+		
+	// } ftp;
+
+} conn_entry_metadata_t;
 
 // connection table
 typedef struct {
-	unsigned int   		src_ip;		  	// if you use this struct in userspace, change the type to unsigned int
-	unsigned short 			src_port;	  	// if you use this struct in userspace, change the type to unsigned short
-	unsigned int			dst_ip;		  	// if you use this struct in userspace, change the type to unsigned int
-	unsigned short 			dst_port;	  	// if you use this struct in userspace, change the type to unsigned short
-	state_t     	state;
+	unsigned int   				src_ip;		  	// if you use this struct in userspace, change the type to unsigned int
+	unsigned short  					src_port;	  	// if you use this struct in userspace, change the type to unsigned short
+	unsigned int 					dst_ip;		  	// if you use this struct in userspace, change the type to unsigned int
+	unsigned short 					dst_port;	  	// if you use this struct in userspace, change the type to unsigned short
+	state_t     			state;
+	conn_entry_metadata_t 	metadata;
 } conn_entry_t;
 
 #endif // _FW_H_

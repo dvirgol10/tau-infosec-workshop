@@ -100,12 +100,13 @@ void get_conn_tab() {
 		exit(1);
 	}
 
-	if ((num_conn_entries = read(fd, conn_tab, PAGE_SIZE) / sizeof(conn_entry_t)) == -1) {
+	if ((num_conn_entries = read(fd, conn_tab, PAGE_SIZE)) == -1) {
 		close(fd);
 		perror("read");
 		exit(1);
 	}
-
+	
+	num_conn_entries = num_conn_entries / sizeof(conn_entry_t);
 	close(fd);
 }
 
@@ -113,7 +114,7 @@ void get_conn_tab() {
 void show_conns() {
 	int i = 0;
 	get_conn_tab();
-	printf("src_ip\t\t\tsrc_port\t\tdst_ip\tdst_port\t\tstate\n"); // the headline
+	printf("src_ip\t\tsrc_port\tdst_ip\t\tdst_port\tstate\t\ttype\tclient_ip\tclient_port\tserver_ip\tserver_port\tforged_client_port\n"); // the headline
 	for (i = 0; i < num_conn_entries; i++) {
 		print_conn_entry(&conn_tab[i]); // prints the i-th conn_entry
 	}

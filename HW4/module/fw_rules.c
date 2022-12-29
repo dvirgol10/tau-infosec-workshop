@@ -153,41 +153,40 @@ int is_xmas(struct sk_buff* skb) {
 
 
 // searches a matching rule for the packet, writes it in the log and returns the verdict for the packet
-int match_rules(struct sk_buff* skb, direction_t pkt_direction, int to_update_conn_tab_and_log) {
+verdict_t match_rules(struct sk_buff* skb, direction_t pkt_direction, int to_update_conn_tab_and_log) {
 	int i;
-	__u8 action;
-	reason_t reason;
+	verdict_t verdict;
 	conn_entry_metadata_t metadata;
 	metadata.type = TCP_CONN_OTHER;
 	if (is_xmas(skb)) {
-		action = NF_DROP; // we drop every christmas tree packet
-		reason = REASON_XMAS_PACKET;
+		verdict.action = NF_DROP; // we drop every christmas tree packet
+		verdict.reason = REASON_XMAS_PACKET;
 	} else {
 		for (i = 0; i < num_rules; i++) {
 			if (match_rule(&rule_table[i], skb, pkt_direction)) {
-				action = rule_table[i].action; // the verdict is by the action written in the rule
-				reason = i; // the reason is the index of the rule
-				if (to_update_conn_tab_and_log && ip_hdr(skb)->protocol == PROT_TCP && action == NF_ACCEPT) { // if this is a TCP packet we want to update the dynamic connection table appropriately
+				verdict.action = rule_table[i].action; // the verdict is by the action written in the rule
+				verdict.reason = i; // the reason is the index of the rule
+				if (to_update_conn_tab_and_log && ip_hdr(skb)->protocol == PROT_TCP && verdict.action == NF_ACCEPT) { // if this is a TCP packet we want to update the dynamic connection table appropriately
 					if (get_packet_syn(skb)) {
 						if (!update_conn_tab_with_new_connection(skb, metadata)) { // if the update has failed, meaning if there was already such connection between the endpoints
-							action = NF_DROP;
-							reason = REASON_ALREADY_HAS_CONN_ENTRY;
+							verdict.action = NF_DROP;
+							verdict.reason = REASON_ALREADY_HAS_CONN_ENTRY;
 						}
 					} else {
-						action = NF_DROP;
-						reason = REASON_ILLEGAL_VALUE;
+						verdict.action = NF_DROP;
+						verdict.reason = REASON_ILLEGAL_VALUE;
 					}
 				}
 				break; // we want the first matching rule
 			}
 		}
 		if (i == num_rules) { // we didn't find any matching rule
-			action = NF_DROP;
-			reason = REASON_NO_MATCHING_RULE;
+			verdict.action = NF_DROP;
+			verdict.reason = REASON_NO_MATCHING_RULE;
 		}
 	}
-	if (to_update_conn_tab_and_log || action = NF_DROP) {
-		update_log(skb, reason, action); // update the log with the input packet
+	if (to_update_conn_tab_and_log || verdict.action == NF_DROP) {
+		update_log(skb, verdict.reason, verdict.action); // update the log with the input packet
 	}
-	return action;
+	return verdict;
 }
