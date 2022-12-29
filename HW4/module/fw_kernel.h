@@ -47,11 +47,16 @@ typedef enum {
 #define OUT_NET_DEVICE_NAME			"enp0s9"
 
 // auxiliary values, for your convenience
-#define IP_VERSION		(4)
-#define PORT_ANY		(0)
-#define PORT_ABOVE_1023	(1023)
-#define MAX_RULES		(50)
-#define RULE_TABLE_SIZE (MAX_RULES * sizeof(rule_t))
+#define IP_VERSION			(4)
+#define PORT_ANY			(0)
+#define PORT_ABOVE_1023		(1023)
+#define MAX_RULES			(50)
+#define RULE_TABLE_SIZE 	(MAX_RULES * sizeof(rule_t))
+#define HTTP_PORT			(80)
+#define FTP_PORT			(21)
+#define HTTP_MITM_PORT		(800)
+#define FTP_MITM_PORT		(210)
+#define LOOPBACK_ADDR_BE	(16777343) 	// 16777343 is "127.0.0.1" in BE, 255 is "255.0.0.0" in BE
 
 // device minor numbers, for your convenience
 typedef enum {
@@ -114,11 +119,34 @@ typedef enum {
 
 // connection table
 typedef struct {
-	__be32   		src_ip;		  	// if you use this struct in userspace, change the type to unsigned int
-	__be16 			src_port;	  	// if you use this struct in userspace, change the type to unsigned short
-	__be32			dst_ip;		  	// if you use this struct in userspace, change the type to unsigned int
-	__be16 			dst_port;	  	// if you use this struct in userspace, change the type to unsigned short
-	state_t     	state;
+	__be32   				src_ip;		  	// if you use this struct in userspace, change the type to unsigned int
+	__be16 					src_port;	  	// if you use this struct in userspace, change the type to unsigned short
+	__be32					dst_ip;		  	// if you use this struct in userspace, change the type to unsigned int
+	__be16 					dst_port;	  	// if you use this struct in userspace, change the type to unsigned short
+	state_t     			state;
+	conn_entry_metadata_t 	metadata;
 } conn_entry_t;
+
+
+typedef enum {
+	TCP_CONN_HTTP,
+	TCP_CONN_FTP,
+	TCP_CONN_OTHER,
+} tcp_conn_type_t;
+
+
+typedef struct {
+	tcp_conn_type_t type;
+	__be32 client_ip;
+	__be16 client_port;
+	__be32 server_ip;
+	__be16 server_port;
+	__be16 forged_client_port;
+
+	struct ftp {
+		
+	} ftp;
+
+} conn_entry_metadata_t;
 
 #endif // _FW_H_

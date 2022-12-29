@@ -141,7 +141,7 @@ int match_rule(rule_t* rule, struct sk_buff* skb, direction_t pkt_direction) {
 
 // checks if the packet is a loopback packet
 int is_loopback(struct sk_buff* skb) {
-	return match_ip(16777343, ip_hdr(skb)->daddr, 255); // 16777343 is "127.0.0.1" in BE, 255 is "255.0.0.0" in BE
+	return match_ip(LOOPBACK_ADDR_BE, ip_hdr(skb)->daddr, 255);
 }
 
 
@@ -153,10 +153,12 @@ int is_xmas(struct sk_buff* skb) {
 
 
 // searches a matching rule for the packet, writes it in the log and returns the verdict for the packet
-int match_rules(struct sk_buff* skb, direction_t pkt_direction) {
+int match_rules(struct sk_buff* skb, direction_t pkt_direction, int to_update_conn_tab_and_log) {
 	int i;
 	__u8 action;
-	reason_t reason; 
+	reason_t reason;
+	conn_entry_metadata_t metadata;
+	metadata.type = TCP_CONN_OTHER;
 	if (is_xmas(skb)) {
 		action = NF_DROP; // we drop every christmas tree packet
 		reason = REASON_XMAS_PACKET;
@@ -165,10 +167,15 @@ int match_rules(struct sk_buff* skb, direction_t pkt_direction) {
 			if (match_rule(&rule_table[i], skb, pkt_direction)) {
 				action = rule_table[i].action; // the verdict is by the action written in the rule
 				reason = i; // the reason is the index of the rule
-				if (ip_hdr(skb)->protocol == PROT_TCP && get_packet_syn(skb) && action == NF_ACCEPT) { // if this is a TCP packet we want to update the dynamic connection table appropriately
-					if (!update_conn_tab_with_new_connection(skb)) { // if the update has failed, meaning if there was already such connection between the endpoints
+				if (to_update_conn_tab_and_log && ip_hdr(skb)->protocol == PROT_TCP && action == NF_ACCEPT) { // if this is a TCP packet we want to update the dynamic connection table appropriately
+					if (get_packet_syn(skb)) {
+						if (!update_conn_tab_with_new_connection(skb, metadata)) { // if the update has failed, meaning if there was already such connection between the endpoints
+							action = NF_DROP;
+							reason = REASON_ALREADY_HAS_CONN_ENTRY;
+						}
+					} else {
 						action = NF_DROP;
-						reason = REASON_ALREADY_HAS_CONN_ENTRY;
+						reason = REASON_ILLEGAL_VALUE;
 					}
 				}
 				break; // we want the first matching rule
@@ -179,6 +186,8 @@ int match_rules(struct sk_buff* skb, direction_t pkt_direction) {
 			reason = REASON_NO_MATCHING_RULE;
 		}
 	}
-	update_log(skb, reason, action); // update the log with the input packet
+	if (to_update_conn_tab_and_log || action = NF_DROP) {
+		update_log(skb, reason, action); // update the log with the input packet
+	}
 	return action;
 }

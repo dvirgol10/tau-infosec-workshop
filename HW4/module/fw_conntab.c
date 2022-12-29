@@ -32,7 +32,7 @@ void add_conn_entry(__be32 src_ip, __be16 src_port, __be32 dst_ip, __be16 dst_po
 }
 
 
-int update_conn_tab_with_new_connection(struct sk_buff* skb) {
+int update_conn_tab_with_new_connection(struct sk_buff* skb, conn_entry_metadata_t metadata) {
 	struct iphdr *hdr;
 	__be32 src_ip, dst_ip;
 	__be16 src_port, dst_port;
@@ -41,7 +41,7 @@ int update_conn_tab_with_new_connection(struct sk_buff* skb) {
 	dst_ip = hdr->daddr;
 	src_port = tcp_hdr(skb)->source;
 	dst_port = tcp_hdr(skb)->dest;
-
+	//TODO add the metadata part
 	if (find_matching_conn_entry_node(src_ip, src_port, dst_ip, dst_port)) { // there is already a record for this connection
 		return 0;
 	}
@@ -182,6 +182,56 @@ __u16 get_packet_ack(struct sk_buff* skb) {
 	return tcp_flag_word(tcp_hdr(skb)) & TCP_FLAG_ACK;
 }
 
+
 __u16 get_packet_rst(struct sk_buff* skb) {
 	return tcp_flag_word(tcp_hdr(skb)) & TCP_FLAG_RST;
+}
+
+
+void forge_lo_tcp_packet(struct sk_buff* skb, conn_entry_metadata_t* p_metadata, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server) {
+	if (from_http_client || from_ftp_client) {
+		ip_hdr(skb)->saddr = p_metadata->client_ip;
+	}
+	if (from_http_server) {
+		ip_hdr(skb)->saddr = p_metadata->server_ip;
+		tcp_hdr(skb)->source = HTTP_PORT;
+	}
+	if (from_ftp_server) {
+		ip_hdr(skb)->saddr = p_metadata->server_ip;
+		tcp_hdr(skb)->source = FTP_PORT;
+	}
+
+	update_checksum(skb);
+}
+
+
+void forge_pr_tcp_packet(struct sk_buff* skb, int from_http_client, int from_ftp_client) {
+	ip_hdr(skb)->daddr = LOOPBACK_ADDR_BE;
+	
+	if (from_http_client) {
+		tcp_hdr(skb)->dest = HTTP_MITM_PORT;
+	}
+	if (from_ftp_client) {
+		tcp_hdr(skb)->dest = FTP_MITM_PORT;
+	}
+
+	update_checksum(skb);
+}
+
+
+conn_entry_metadata_t create_conn_metadata(struct sk_buff* skb, __be32 original_src_ip, __be16 original_src_port, int from_http_client, int from_ftp_client) {
+	conn_entry_metadata_t metadata;
+	metadata.client_ip = original_src_ip;
+	metadata.client_port = original_src_port;
+	metadata.server_ip = ip_hdr(skb)->daddr;
+	metadata.server_port = tcp_hdr(skb)->dest;
+
+	if (from_http_client) {
+		metadata.type = TCP_CONN_HTTP;
+	} else if (from_ftp_client) {
+		metadata.type = TCP_CONN_FTP;
+	} else {
+		metadata.type = TCP_CONN_OTHER;
+	}
+	return metadata;
 }

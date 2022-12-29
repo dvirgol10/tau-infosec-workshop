@@ -16,10 +16,13 @@ int next_log_row_index_to_be_read = -1; // stores the index of the next log_row 
 log_list_node *next_log_node_to_be_read = NULL; // stores the address of the next log row's node which may be read (for optimization)
 
 
-unsigned int handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
-ssize_t read_logs(struct file *filp, char *buff, size_t count, loff_t *offp);
+unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
 int register_pr_hook(void);
 void unregister_pr_hook(void);
+unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook_state *state);
+int register_lo_hook(void);
+void unregister_lo_hook(void);
+ssize_t read_logs(struct file *filp, char *buff, size_t count, loff_t *offp);
 ssize_t load_rules(struct device *dev, struct device_attribute *attr, const char *buf, size_t count);
 ssize_t show_rules(struct device *dev, struct device_attribute *attr, char *buf);
 ssize_t reset_logs(struct device *dev, struct device_attribute *attr, const char *buf, size_t count);
@@ -32,6 +35,7 @@ static struct file_operations fops = {
 };
 
 static struct nf_hook_ops pre_routing_nfho;
+static struct nf_hook_ops local_out_nfho;
 
 
 // init attributes 
@@ -40,8 +44,57 @@ static DEVICE_ATTR(reset, S_IWUSR | S_IWGRP , NULL, reset_logs);
 static DEVICE_ATTR(conns, S_IRUSR | S_IRGRP , show_conns, NULL);
 
 
+unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+
+	if (skb->protocol != htons(ETH_P_IP)) {
+		return NF_ACCEPT; // we accept any non-IPv4 packet without logging it
+	}
+	
+	if (ip_hdr(skb)->protocol == PROT_TCP) {
+		__be16 my_src_port = tcp_hdr(skb)->source;
+		__be16 my_dst_port = tcp_hdr(skb)->dest;
+		int from_http_client = (ntohs(my_dst_port) == HTTP_PORT);
+		int from_http_server = (ntohs(my_src_port) == HTTP_MITM_PORT);
+		int from_ftp_client = (ntohs(my_dst_port) == FTP_PORT);
+		int from_ftp_server = (ntohs(my_src_port) == FTP_MITM_PORT);
+		conn_entry_metadata_t* p_metadata = retrieve_matching_metadata_of_packet(skb);
+
+		switch (p_metadata->type) {
+		case TCP_CONN_HTTP:
+		case TCP_CONN_FTP:
+			break;		
+		case TCP_CONN_OTHER:
+			return NF_ACCEPT;
+		}
+
+		forge_lo_tcp_packet(skb, p_metadata, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
+
+		return match_conn_entries(skb); // we need to add a state of before the first SYN
+	}
+
+	return NF_ACCEPT;
+}
+
+// I used the following source: https://infosecwriteups.com/linux-kernel-communication-part-1-netfilter-hooks-15c07a5a5c4e
+int register_lo_hook(void) {
+	local_out_nfho.hook = (nf_hookfn*) lo_handle_packet;
+	local_out_nfho.hooknum = NF_INET_LOCAL_OUT;
+	local_out_nfho.pf = PF_INET;
+	local_out_nfho.priority = NF_IP_PRI_FIRST;
+	return nf_register_net_hook(&init_net, &local_out_nfho);
+}
+
+
+void unregister_lo_hook(void) {
+	nf_unregister_net_hook(&init_net, &local_out_nfho);
+}
+
+
+
 // this is the hook function, gets a packet in the "pre routing" hook, documents it in the log if needed, and returns the verdict for the packet
-unsigned int handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook_state *state) {
+	__u8 action;
+	reason_t reason;
 	struct iphdr *hdr;
 	direction_t pkt_direction;
 	// determine the direction of the packet
@@ -53,8 +106,6 @@ unsigned int handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook
 
 	if (skb->protocol != htons(ETH_P_IP)) {
 		return NF_ACCEPT; // we accept any non-IPv4 packet without logging it
-	} else if (is_loopback(skb)) { // we accept any loopback packet without logging it
-		return NF_ACCEPT;
 	}
 	
 	hdr = ip_hdr(skb);
@@ -63,16 +114,57 @@ unsigned int handle_packet(void *priv, struct sk_buff *skb, const struct nf_hook
 		default: return NF_ACCEPT; // we accept any non-TCP, UDP and ICMP protocol without logging it
 	}
 
-	if ((hdr->protocol == PROT_TCP) && get_packet_ack(skb)) {
-		return match_conn_entries(skb);
+	if (hdr->protocol == PROT_TCP) {
+		__be16 original_src_port = tcp_hdr(skb)->source;
+		__be16 original_dst_port = tcp_hdr(skb)->dest;
+		__be32 original_src_ip = ip_hdr(skb)->saddr;
+		int from_http_client = (ntohs(original_dst_port) == HTTP_PORT);
+		int from_http_server = (ntohs(original_src_port) == HTTP_PORT);
+		int from_ftp_client = (ntohs(original_dst_port) == FTP_PORT);
+		int from_ftp_server = (ntohs(original_src_port) == FTP_PORT);
+		conn_entry_metadata_t metadata;
+		
+		if (get_packet_ack(skb)) {
+			if (from_http_client || from_http_server || from_ftp_client || from_ftp_server) {
+				forge_pr_tcp_packet(skb, from_http_client, from_ftp_client);
+			}
+			return match_conn_entries(skb);
+		} else {
+			if (from_http_client || from_ftp_client) {
+				action = match_rules(skb, pkt_direction, 0);
+				if (action == NF_DROP) {
+					return NF_DROP;
+				} else {
+					metadata = create_conn_metadata(skb, original_src_ip, original_src_port, from_http_client, from_ftp_client);
+					forge_pr_tcp_packet(skb, from_http_client, from_ftp_client);
+					if (get_packet_syn(skb)) { // if this is a TCP packet we want to update the dynamic connection table appropriately
+						if (!update_conn_tab_with_new_connection(skb, metadata)) { // if the update has failed, meaning if there was already such connection between the endpoints
+							action = NF_DROP;
+							reason = REASON_ALREADY_HAS_CONN_ENTRY;
+						}
+					} else {
+						action = NF_DROP;
+						reason = REASON_ILLEGAL_VALUE;
+					}
+					update_log(skb, reason, action); // update the log with the input packet			
+					return action;
+				}
+			} else {
+				return match_rules(skb, pkt_direction, 1);
+			}
+		}
 	}
 
-	return match_rules(skb, pkt_direction);
+	if (is_loopback(skb)) { // we accept any loopback packet without logging it // TODO maybe remove this because now we look for loopback packets 
+		return NF_ACCEPT;
+	}
+
+	return match_rules(skb, pkt_direction, 1);
 }
 
 // I used the following source: https://infosecwriteups.com/linux-kernel-communication-part-1-netfilter-hooks-15c07a5a5c4e
 int register_pr_hook(void) {
-	pre_routing_nfho.hook = (nf_hookfn*) handle_packet;
+	pre_routing_nfho.hook = (nf_hookfn*) pr_handle_packet;
 	pre_routing_nfho.hooknum = NF_INET_PRE_ROUTING;
 	pre_routing_nfho.pf = PF_INET;
 	pre_routing_nfho.priority = NF_IP_PRI_FIRST;
