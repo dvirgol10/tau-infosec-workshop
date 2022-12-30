@@ -55,7 +55,7 @@ int update_conn_tab_with_new_connection(struct sk_buff* skb, conn_entry_metadata
 
 	add_conn_entry(src_ip, src_port, dst_ip, dst_port, SYN_RECEIVED, metadata);
 	if (metadata.type != TCP_CONN_OTHER) {
-		add_conn_entry(dst_ip, 0, metadata.server_ip, metadata.server_port, WAITING_TO_START, metadata);
+		add_conn_entry(FAKE_CLIENT_ADDR_BE, 0, metadata.server_ip, metadata.server_port, WAITING_TO_START, metadata);
 	}
 
 	return 1;
@@ -236,14 +236,20 @@ void forge_lo_tcp_packet(struct sk_buff* skb, conn_entry_metadata_t* p_metadata,
 }
 
 
-void forge_pr_tcp_packet(struct sk_buff* skb, int from_http_client, int from_ftp_client) {
-	ip_hdr(skb)->daddr = 50397450; // LOOPBACK_ADDR_BE;
-	
+void forge_pr_tcp_packet(struct sk_buff* skb, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server) {
 	if (from_http_client) {
+		ip_hdr(skb)->daddr = FAKE_SERVER_ADDR_BE;
 		tcp_hdr(skb)->dest = HTTP_MITM_PORT_BE;
 	}
+	if (from_http_server) {
+		ip_hdr(skb)->daddr = FAKE_CLIENT_ADDR_BE;
+	}
 	if (from_ftp_client) {
+		ip_hdr(skb)->daddr = FAKE_SERVER_ADDR_BE;
 		tcp_hdr(skb)->dest = FTP_MITM_PORT_BE;
+	}
+	if (from_ftp_server) {
+		ip_hdr(skb)->daddr = FAKE_CLIENT_ADDR_BE;
 	}
 
 	update_checksum(skb);

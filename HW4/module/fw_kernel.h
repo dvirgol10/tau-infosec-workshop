@@ -58,6 +58,8 @@ typedef enum {
 #define HTTP_MITM_PORT_BE	(8195)		// 8195 is 800 in BE
 #define FTP_MITM_PORT_BE	(53760)		// 53760 is 210 in BE
 #define LOOPBACK_ADDR_BE	(16777343) 	// 16777343 is "127.0.0.1" in BE, 255 is "255.0.0.0" in BE
+#define FAKE_SERVER_ADDR_BE	(50397450)	// 50397450 is "10.1.1.3"
+#define FAKE_CLIENT_ADDR_BE	(50462986)	// 50462986 is "10.1.2.3"
 
 // device minor numbers, for your convenience
 typedef enum {

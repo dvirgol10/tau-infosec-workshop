@@ -132,7 +132,7 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		
 		if (get_packet_ack(skb)) {
 			if (from_http_client || from_http_server || from_ftp_client || from_ftp_server) {
-				forge_pr_tcp_packet(skb, from_http_client, from_ftp_client);
+				forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
 			}
 			verdict = match_conn_entries(skb);
 			return verdict.action;
@@ -143,7 +143,7 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 					return NF_DROP;
 				} else {
 					metadata = create_conn_metadata(skb, original_src_ip, original_src_port, from_http_client, from_ftp_client);
-					forge_pr_tcp_packet(skb, from_http_client, from_ftp_client);
+					forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
 					if (get_packet_syn(skb)) { // if this is a TCP packet we want to update the dynamic connection table appropriately
 						if (!update_conn_tab_with_new_connection(skb, metadata)) { // if the update has failed, meaning if there was already such connection between the endpoints
 							verdict.action = NF_DROP;

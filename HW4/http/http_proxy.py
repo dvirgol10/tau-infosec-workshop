@@ -53,6 +53,7 @@ def create_forged_connection_with_real_server(client, i):
         
         metadata.forged_client_port = socket.htons(server.getsockname()[1])        
         f.write(metadata)
+    print("Trying to connect the server")
     server.connect((socket.inet_ntoa(struct.pack('I', metadata.server_ip)), socket.ntohs(metadata.server_port)))
     print("Server socket for Client #{}{}: {} --> {}".format(i, client.getpeername(), server.getsockname(), server.getpeername()))
     return server
