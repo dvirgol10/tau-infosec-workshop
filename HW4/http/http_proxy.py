@@ -40,7 +40,8 @@ def onclose(client):
     
 
 def create_forged_connection_with_real_server(client, i):
-    server = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     server.bind(('0.0.0.0', 0))
     metadata = 0
     with open("/sys/class/fw/conns/proxy", "r+b") as f:

@@ -71,10 +71,10 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		case TCP_CONN_OTHER:
 			return NF_ACCEPT;
 		}
+
+		verdict = match_conn_entries(skb); // we need to add a state of before the first SYN
 		printk(KERN_INFO "Now we forge the local out packet\n");
 		forge_lo_tcp_packet(skb, p_metadata, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
-		verdict = match_conn_entries(skb); // we need to add a state of before the first SYN
-
 
 		return verdict.action;
 	}
