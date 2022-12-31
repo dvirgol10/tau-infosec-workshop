@@ -75,6 +75,8 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		verdict = match_conn_entries(skb, 1); // we need to add a state of before the first SYN
 		printk(KERN_INFO "Now we forge the local out packet\n");
 		forge_lo_tcp_packet(skb, p_metadata, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
+		
+		printk(KERN_INFO "HERE2");
 
 		return verdict.action;
 	}
@@ -131,13 +133,16 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		conn_entry_metadata_t metadata;
 		
 		if (get_packet_ack(skb)) {
+			printk(KERN_INFO "I am here");
 			if (from_http_client || from_http_server || from_ftp_client || from_ftp_server) {
 				forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
 			}
+			printk(KERN_INFO "HERE3");
 			verdict = match_conn_entries(skb, 1);
 			return verdict.action;
 		} else {
 			if (from_http_client || from_ftp_client) {
+				printk(KERN_INFO "PLEASE!");
 				verdict = match_rules(skb, pkt_direction, 0);
 				if (verdict.action == NF_DROP) {
 					return NF_DROP;
@@ -153,6 +158,7 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 						verdict.action = NF_DROP;
 						verdict.reason = REASON_ILLEGAL_VALUE;
 					}
+					printk(KERN_INFO "HERE1");
 					update_log(skb, verdict.reason, verdict.action); // update the log with the input packet			
 					return verdict.action;
 				}
@@ -325,7 +331,7 @@ ssize_t update_metadata(struct device *dev, struct device_attribute *attr, const
 		}
 	}
 
-	if (metadata.random_ftp_data_port != 0) {
+	if (metadata.random_ftp_data_port != 0) { // && metadata.type == TCP_CONN_FTP
 		add_conn_entry(metadata.server_ip, FTP_DATA_SRC_PORT, metadata.client_ip, metadata.random_ftp_data_port, WAITING_TO_START, metadata);
 	}
 

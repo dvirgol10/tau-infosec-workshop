@@ -158,6 +158,7 @@ verdict_t match_rules(struct sk_buff* skb, direction_t pkt_direction, int to_upd
 	verdict_t verdict;
 	conn_entry_metadata_t metadata;
 	metadata.type = TCP_CONN_OTHER;
+	metadata.random_ftp_data_port = 0;
 	if (is_xmas(skb)) {
 		verdict.action = NF_DROP; // we drop every christmas tree packet
 		verdict.reason = REASON_XMAS_PACKET;
