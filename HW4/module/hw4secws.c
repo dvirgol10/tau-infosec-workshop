@@ -64,6 +64,10 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		int from_ftp_server = my_src_port == FTP_MITM_PORT_BE;
 		conn_entry_metadata_t* p_metadata = retrieve_matching_metadata_of_packet(skb);
 
+		if (!p_metadata) {
+			return NF_DROP;
+		}
+
 		switch (p_metadata->type) {
 		case TCP_CONN_HTTP:
 		case TCP_CONN_FTP:
@@ -332,7 +336,10 @@ ssize_t update_metadata(struct device *dev, struct device_attribute *attr, const
 	}
 
 	if (metadata.random_ftp_data_port != 0) { // && metadata.type == TCP_CONN_FTP
+		printk(KERN_INFO "Metata for you!\n");
 		add_conn_entry(metadata.server_ip, FTP_DATA_SRC_PORT, metadata.client_ip, metadata.random_ftp_data_port, WAITING_TO_START, metadata);
+	} else {
+		printk(KERN_INFO "No metadata for you!\n");
 	}
 
 	return count;

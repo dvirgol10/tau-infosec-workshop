@@ -140,6 +140,7 @@ int update_conn_entry_state(conn_entry_node* conn_node, __be32 src_ip, __be16 sr
 		}
 		break;
 	case FIN_1_RECEIVED:
+		printk(KERN_INFO "I am in FIN_1_RECEIVED is_client=%d fin=%d\n", is_client, pkt_fin);
 		if (is_server && pkt_fin) {
 			printk(KERN_INFO "FIN_1_RECEIVED -> FIN_2_RECEIVED\n");
 			p_conn_entry->state = FIN_2_RECEIVED;

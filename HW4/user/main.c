@@ -114,7 +114,7 @@ void get_conn_tab() {
 void show_conns() {
 	int i = 0;
 	get_conn_tab();
-	printf("src_ip\t\tsrc_port\tdst_ip\t\tdst_port\tstate\t\ttype\tclient_ip\tclient_port\tserver_ip\tserver_port\tforged_client_port\random_ftp_data_port\n"); // the headline
+	printf("src_ip\t\tsrc_port\tdst_ip\t\tdst_port\tstate\t\ttype\tclient_ip\tclient_port\tserver_ip\tserver_port\tforged_client_port\trandom_ftp_data_port\n"); // the headline
 	for (i = 0; i < num_conn_entries; i++) {
 		print_conn_entry(&conn_tab[i]); // prints the i-th conn_entry
 	}

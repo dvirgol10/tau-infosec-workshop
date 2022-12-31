@@ -20,16 +20,31 @@ class Metadata(ctypes.Structure):
 
 MetadataSize = ctypes.sizeof(Metadata)
 
+
+def block_response(message):
+    first_index = message.find("Content-type")
+    if first_index == -1:
+        return False
+    second_index = message[first_index:].find("\r\n")
+    if second_index == -1:
+        return False
+    second_index += first_index
+    if "text/csv" in message[first_index : second_index] or "application/zip" in message[first_index : second_index]:
+        return True
+    return False
    
-def onmessage(client, message, i, server):
-    print("Client #{} Sent Message: {}".format(i, message.decode()))
-    #Sending message to all clients
-    #self.broadcast(message)
-    #client.send("Got it".encode())
+
+def onmessage(client, message, i, server, isclient):
+    if isclient:
+        print("Client #{} Sent Message: {}".format(i, message.decode()))
+    else:
+        print("Server #{} Sent Message: {}".format(i, message.decode()))
+
+    if not isclient:
+        if block_response(message.decode()):
+            return
+
     server.send(message)
-    response = server.recv(4096)
-    print("Server for Client #{} Sent Response: {}".format(i, response.decode()))
-    client.send(response)
 
     
 def onopen(client):
@@ -60,20 +75,32 @@ def create_forged_connection_with_real_server(client, i):
     return server
 
 
-def recieve(client, server, i):
+def recieve(client, server, i, isclient):
     while True:
         data = client.recv(4096)
         if data == b'':
             break
         #Message Received
-        onmessage(client, data, i, server)
-    #Removing client from clients list
-    clients.remove(client)
-    #Client Disconnected
-    onclose(client)
-    #Closing connection with client
-    client.close()
-    server.close()
+        onmessage(client, data, i, server, isclient)
+    if isclient:
+        #Removing client from clients list
+        clients.remove(client)
+        clients.remove(server)
+        #Client Disconnected
+        onclose(client)
+        #Closing connection with client
+        client.close()
+        try:
+            server.shutdown(socket.SHUT_RDWR)
+        except socket.error:
+            pass
+    else:
+        onclose(server)
+        client.close()
+        try:
+            server.shutdown(socket.SHUT_RDWR)
+        except socket.error:
+            pass
     #Closing thread
     thread.exit()
     
@@ -81,15 +108,16 @@ def recieve(client, server, i):
 def accept_clients(proxy):
     i = 0
     while True:
-        (clientsocket, address) = proxy.accept()
+        clientsocket, _ = proxy.accept()
         #Adding client to clients list
         clients.append(clientsocket)
         #Client Connected
         onopen(clientsocket)
         serversocket = create_forged_connection_with_real_server(clientsocket, i)
-
+        clients.append(serversocket)
         #Receiving data from client
-        thread.start_new_thread(recieve, (clientsocket, serversocket, i))
+        thread.start_new_thread(recieve, (clientsocket, serversocket, i, True))
+        thread.start_new_thread(recieve, (serversocket, clientsocket, i, False))
         i += 1
         
 

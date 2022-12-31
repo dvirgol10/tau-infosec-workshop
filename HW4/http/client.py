@@ -7,7 +7,7 @@ def Main():
     host = '10.1.2.2'
  
     # Define the port on which you want to connect
-    port = 80
+    port = 42 #80
  
     s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
  
