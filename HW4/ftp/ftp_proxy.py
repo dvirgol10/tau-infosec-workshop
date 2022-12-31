@@ -20,21 +20,33 @@ class Metadata(ctypes.Structure):
 
 MetadataSize = ctypes.sizeof(Metadata)
 
-   
-def onmessage(client, message, i, server, metadata):
-    print("Client #{} Sent Message: {}".format(i, message.decode()))
-    #Sending message to all clients
-    #self.broadcast(message)
-    #client.send("Got it".encode())
 
+def handle_port_command_if_needed(message, metadata):
+    port_command_index = message.find("PORT")
+    if port_command_index == -1:
+        return
+    body = message[port_command_index + 5:-2].split(",")
+    if len(body) != 6:
+        return
+    client_ip = body[0] + "." + body[1] + "." + body[2] + "." + body[3]
+    if socket.inet_ntoa(struct.pack('I', metadata.client_ip)) != client_ip:
+        return
+    port = int(body[4]) * 256 + int(body[5])
     with open("/sys/class/fw/conns/proxy", "wb") as f:
-        metadata.random_ftp_data_port = socket.htons(message.decode())
+        metadata.random_ftp_data_port = socket.htons(port)
         f.write(metadata)
+   
+
+def onmessage(client, message, i, server, isclient, metadata):
+    if isclient:
+        print("Client #{} Sent Message: {}".format(i, message.decode()))
+    else:
+        print("Server #{} Sent Message: {}".format(i, message.decode()))
+
+    if isclient:
+        handle_port_command_if_needed(message.decode(), metadata)
 
     server.send(message)
-    response = server.recv(4096)
-    print("Server for Client #{} Sent Response: {}".format(i, response.decode()))
-    client.send(response)
 
     
 def onopen(client):
@@ -65,20 +77,32 @@ def create_forged_connection_with_real_server(client, i):
     return server, metadata
 
 
-def recieve(client, server, metadata, i):
+def recieve(client, server, i, isclient, metadata):
     while True:
         data = client.recv(4096)
         if data == b'':
             break
         #Message Received
-        onmessage(client, data, i, server, metadata)
-    #Removing client from clients list
-    clients.remove(client)
-    #Client Disconnected
-    onclose(client)
-    #Closing connection with client
-    client.close()
-    server.close()
+        onmessage(client, data, i, server, isclient, metadata)
+    if isclient:
+        #Removing client from clients list
+        clients.remove(client)
+        clients.remove(server)
+        #Client Disconnected
+        onclose(client)
+        #Closing connection with client
+        client.close()
+        try:
+            server.shutdown(socket.SHUT_RDWR)
+        except socket.error:
+            pass
+    else:
+        onclose(server)
+        client.close()
+        try:
+            server.shutdown(socket.SHUT_RDWR)
+        except socket.error:
+            pass
     #Closing thread
     thread.exit()
     
@@ -86,15 +110,16 @@ def recieve(client, server, metadata, i):
 def accept_clients(proxy):
     i = 0
     while True:
-        (clientsocket, address) = proxy.accept()
+        clientsocket, _ = proxy.accept()
         #Adding client to clients list
         clients.append(clientsocket)
         #Client Connected
         onopen(clientsocket)
         serversocket, metadata = create_forged_connection_with_real_server(clientsocket, i)
-
+        clients.append(serversocket)
         #Receiving data from client
-        thread.start_new_thread(recieve, (clientsocket, serversocket, metadata, i))
+        thread.start_new_thread(recieve, (clientsocket, serversocket, i, True, metadata))
+        thread.start_new_thread(recieve, (serversocket, clientsocket, i, False, metadata))
         i += 1
         
 
