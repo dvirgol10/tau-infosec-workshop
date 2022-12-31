@@ -138,7 +138,7 @@ def run(proxy):
 def main():
     proxy = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     proxy.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    proxy.bind(('0.0.0.0', 800))
+    proxy.bind(('0.0.0.0', 210))
     proxy.listen(5)
     run(proxy)
 

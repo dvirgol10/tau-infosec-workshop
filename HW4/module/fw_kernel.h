@@ -53,7 +53,7 @@ typedef enum {
 #define PORT_ABOVE_1023		(1023)
 #define MAX_RULES			(50)
 #define RULE_TABLE_SIZE 	(MAX_RULES * sizeof(rule_t))
-#define HTTP_PORT_BE		(10752)		// 10752 is 42 in BE	//(20480)		// 20480 is 80 in BE
+#define HTTP_PORT_BE		(20480)		// 20480 is 80 in BE
 #define FTP_PORT_BE			(5376)		// 5376 is 21 in BE
 #define HTTP_MITM_PORT_BE	(8195)		// 8195 is 800 in BE
 #define FTP_MITM_PORT_BE	(53760)		// 53760 is 210 in BE

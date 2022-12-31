@@ -335,7 +335,7 @@ ssize_t update_metadata(struct device *dev, struct device_attribute *attr, const
 		}
 	}
 
-	if (metadata.random_ftp_data_port != 0) { // && metadata.type == TCP_CONN_FTP
+	if (metadata.random_ftp_data_port != 0 && metadata.type == TCP_CONN_FTP) {
 		printk(KERN_INFO "Metata for you!\n");
 		add_conn_entry(metadata.server_ip, FTP_DATA_SRC_PORT, metadata.client_ip, metadata.random_ftp_data_port, WAITING_TO_START, metadata);
 	} else {
