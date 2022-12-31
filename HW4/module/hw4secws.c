@@ -72,7 +72,7 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 			return NF_ACCEPT;
 		}
 
-		verdict = match_conn_entries(skb); // we need to add a state of before the first SYN
+		verdict = match_conn_entries(skb, 1); // we need to add a state of before the first SYN
 		printk(KERN_INFO "Now we forge the local out packet\n");
 		forge_lo_tcp_packet(skb, p_metadata, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
 
@@ -134,7 +134,7 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 			if (from_http_client || from_http_server || from_ftp_client || from_ftp_server) {
 				forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
 			}
-			verdict = match_conn_entries(skb);
+			verdict = match_conn_entries(skb, 1);
 			return verdict.action;
 		} else {
 			if (from_http_client || from_ftp_client) {
@@ -157,7 +157,13 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 					return verdict.action;
 				}
 			} else {
-				return match_rules(skb, pkt_direction, 1).action;
+				verdict = match_conn_entries(skb, 0);
+				if (verdict.action == NF_ACCEPT) { // it means that this packet is for the active connection of FTP
+					update_log(skb, verdict.reason, verdict.action); // update the log with the input packet
+				} else {
+					verdict = match_rules(skb, pkt_direction, 1);
+				}
+				return verdict.action;
 			}
 		}
 	}
@@ -317,6 +323,10 @@ ssize_t update_metadata(struct device *dev, struct device_attribute *attr, const
 				p_conn_entry->src_port = metadata.forged_client_port;
 			}
 		}
+	}
+
+	if (metadata.random_ftp_data_port != 0) {
+		add_conn_entry(metadata.server_ip, FTP_DATA_SRC_PORT, metadata.client_ip, metadata.random_ftp_data_port, WAITING_TO_START, metadata);
 	}
 
 	return count;

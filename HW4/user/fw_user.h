@@ -130,11 +130,7 @@ typedef struct {
 	unsigned int  server_ip;
 	unsigned short server_port;
 	unsigned short forged_client_port;
-
-	// struct ftp {
-		
-	// } ftp;
-
+	unsigned short random_ftp_data_port;
 } conn_entry_metadata_t;
 
 // connection table

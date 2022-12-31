@@ -57,6 +57,7 @@ typedef enum {
 #define FTP_PORT_BE			(5376)		// 5376 is 21 in BE
 #define HTTP_MITM_PORT_BE	(8195)		// 8195 is 800 in BE
 #define FTP_MITM_PORT_BE	(53760)		// 53760 is 210 in BE
+#define FTP_DATA_SRC_PORT	(5120)		// 5120 is 20 in BE
 #define LOOPBACK_ADDR_BE	(16777343) 	// 16777343 is "127.0.0.1" in BE, 255 is "255.0.0.0" in BE
 #define FAKE_SERVER_ADDR_BE	(50397450)	// 50397450 is "10.1.1.3"
 #define FAKE_CLIENT_ADDR_BE	(50462986)	// 50462986 is "10.1.2.3"
@@ -139,11 +140,7 @@ typedef struct {
 	__be32 server_ip;
 	__be16 server_port;
 	__be16 forged_client_port;
-
-	// struct ftp {
-		
-	// } ftp;
-
+	__be16 random_ftp_data_port;
 } conn_entry_metadata_t;
 
 // connection table

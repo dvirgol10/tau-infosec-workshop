@@ -212,7 +212,7 @@ void print_metadata(conn_entry_metadata_t metadata) {
 		print_ip(metadata.client_ip);
 		printf("\t%hu\t", ntohs(metadata.client_port));
 		print_ip(metadata.server_ip);
-		printf("\t%hu\t%hu", ntohs(metadata.server_port), ntohs(metadata.forged_client_port));
+		printf("\t%hu\t%hu\t%hu", ntohs(metadata.server_port), ntohs(metadata.forged_client_port), ntohs(metadata.random_ftp_data_port));
 	}
 }
 

@@ -163,7 +163,7 @@ int update_conn_entry_state(conn_entry_node* conn_node, __be32 src_ip, __be16 sr
 
 
 // searches a matching connection table entry for the acked-TCP packet, writes it in the log and returns the verdict for the packet
-verdict_t match_conn_entries(struct sk_buff* skb) {
+verdict_t match_conn_entries(struct sk_buff* skb, int to_update_log) {
 	verdict_t verdict;
 	conn_entry_node *conn_node;
 	struct iphdr *hdr;
@@ -194,7 +194,9 @@ verdict_t match_conn_entries(struct sk_buff* skb) {
 			printk(KERN_INFO "%d %d %d %d", src_ip, src_port, dst_ip, dst_port);
 		}
 	}
-	update_log(skb, verdict.reason, verdict.action); // update the log with the input packet
+	if (to_update_log) {
+		update_log(skb, verdict.reason, verdict.action); // update the log with the input packet
+	}
 	return verdict;
 }
 
@@ -284,7 +286,9 @@ conn_entry_metadata_t create_conn_metadata(struct sk_buff* skb, __be32 original_
 	metadata.client_port = original_src_port;
 	metadata.server_ip = ip_hdr(skb)->daddr;
 	metadata.server_port = tcp_hdr(skb)->dest;
-
+	metadata.forged_client_port = 0;
+	metadata.random_ftp_data_port = 0;
+	
 	if (from_http_client) {
 		metadata.type = TCP_CONN_HTTP;
 	} else if (from_ftp_client) {
@@ -292,6 +296,7 @@ conn_entry_metadata_t create_conn_metadata(struct sk_buff* skb, __be32 original_
 	} else {
 		metadata.type = TCP_CONN_OTHER;
 	}
+
 	return metadata;
 }
 

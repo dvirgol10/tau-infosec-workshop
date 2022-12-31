@@ -27,7 +27,7 @@ conn_entry_node* find_matching_conn_entry_node(__be32 src_ip, __be16 src_port, _
 
 int update_conn_entry_state(conn_entry_node* conn_node, __be32 src_ip, __be16 src_port, __be32 dst_ip, __be16 dst_port, __u16 pkt_syn, __u16 pkt_fin, __u16 pkt_rst);
 
-verdict_t match_conn_entries(struct sk_buff* skb);
+verdict_t match_conn_entries(struct sk_buff* skb, int to_update_log);
 
 __u16 get_packet_syn(struct sk_buff* skb);
 

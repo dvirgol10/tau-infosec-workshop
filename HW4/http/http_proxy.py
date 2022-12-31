@@ -15,7 +15,8 @@ class Metadata(ctypes.Structure):
             ('client_port', ctypes.c_uint16),
             ('server_ip', ctypes.c_uint32),
             ('server_port', ctypes.c_uint16),
-            ('forged_client_port', ctypes.c_uint16)]
+            ('forged_client_port', ctypes.c_uint16),
+            ('random_ftp_data_port', ctypes.c_uint16)]
 
 MetadataSize = ctypes.sizeof(Metadata)
 
