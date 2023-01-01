@@ -1,0 +1,66 @@
+module (firewall):
+
+We create a class and 3 devices, and register the attributes of the devices.
+	1. Device named "rules", which has the attribute "rules" in the path "/sys/class/fw/rules/rules"
+	2. Device named "fw_log", which has the attribute "reset" in the path "/sys/class/fw/fw_log/reset". We can also communicate with this device by reading the logs from "/dev/fw_log"
+	3. Device named "conns", which has the attribute "conns" in the path "/sys/class/fw/conns/conns" and the attribute "proxy" in the path "/sys/class/fw/conns/proxy".
+	   "conns" is used to read the dynamic connection table, and "proxy" is used to get all the TCP metadata of the HTTP and FTP connections and to write a updated metadata to the table (for example, the forged TCP source port for the connection of the proxy program and the real server)
+
+Then, we register two hook: one for pre-routing and one for local-out, and handle each packet as instructed.
+
+The rules table is a static table, the log list and the connection table are linked lists.
+
+We have 3 source files for the module:
+	1. hw3secws.c which conatains all the module-related stuff (module init/cleanup, the I/O functions, hook)
+	2. fw_log.c which conatains all the log-related stuff (updating, freeing)
+	3. fw_rules.c which conatains all the rules-related stuff (validating rules, matching rules)
+	4. fw_conntab.c which contains all the connection table-related stuff (matching connection entries, updating state, forging packets for proxy redirect, etc.)
+
+
+The HTTP and FTP packets which pass through the local-out hook are (probably) packets which our one of our proxy programs send to the real client or server, so there we forge those
+packets accordingly so the server would think that it has arrived from the client, and the client would think that it has arrived from the server. In the forging process we also
+need to correct the checksum of the packets.
+
+Now about the pre-routing hook. First, each non-TCP packet is handled as before: matching to the rule table.
+In general: SYN TCP packets are matched to the rule table, and if we accept the packet we also create a connection table entry for the new connection. Non-SYN TCP packets are matched
+to the connection entries of the dynamic connection table (and also updates the TCP state).
+But there is a special handling for HTTP and FTP packets: We first need to forge them to redirect them to the appropriate proxy program.
+SYN packets of HTTP or FTP are also handled differently: we don't create only one connection in the table, but two connections: One for the connection of the real client with our proxy,
+and one for the connection of our proxy with the real server. We also attach a metadata structure to those entries, which holds the addresses and ports of the real original endpoints
+of those connection, and also a forged port which would store the source port of the connection of the proxy with the real server. For FTP we also keep the port delivered in the "PORT"
+command for the data connection of the FTP protocol. Those two ports are updated by the writings of the proxy programs to the attribute "proxy".
+When we get the port of the FTP data connection we also add a connection entry to the dynamic connection table so in future packets for that connection there will already be an appropriate connection entry.
+
+
+user (main):
+
+The user program is an interface for interacting with the firewall module.
+
+We can send it the following commands:
+	1.	show_rules
+	2.	load_rules <path_to_rules_file>
+	3.	show_log
+	4.	clear_log
+	5.	show_conns
+
+We have 3 source files for the user:
+	1. main.c which conatains all the commands interfaces
+	2. user_parse.c which conatains all the parsing-related stuff (parsing the string representation of the rules to the memory-representation rule structure)
+	3. user_print.c which conatains all the printing-related stuff (printing the log rows, rules and connection entries: from bytes to readable strings)
+
+
+
+proxy (http_proxy, ftp_proxy):
+
+Our proxy programs for HTTP and FTP connection are quite similar, with a little exception we'll elaborate on.
+
+Those programs gets new connections from the redirection happened in the pre-routing hook. For each such a new connection, they create also a connection with the real server,
+so we can operate like man-in-the-middle. The way we know the real server identifier for the new connection, is by reading all the metadata entries of the module and searching for a
+matching one. In there we have the client address and port as well as the server address and port. We also update that metadata structure with the forged source port of our forged connection
+with the real server, and then we notify the firewall module. Thus it knows what is the forged connection and updates it in the dynamic connection entry.
+Then we are just waiting for messages from each connection (by creating two threads). When we get a message from the client, we send it to the server through the second connection, and vice versa.
+But there is a difference: in the FTP proxy, we monitor the responses of the server and if we see that it has "text/csv" or "application/zip" in the "Content-type" header we "drop" it and
+don't deliver the response to the client. Whereas in the FTP proxy, we monitor the commands of the client and if we see that it sent the "PORT" command, we also calculate the destination port
+for the data connection and notify the firewall module (through "proxy" attribute) to add a new connection entry for that data connection. 
+
+** Note: Information about each function role is in the source files ** 

@@ -83,7 +83,7 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		{
 			verdict.action = NF_DROP;
 			verdict.reason = REASON_COULDNT_UPDATE_CHECKSUM;
-			update_log(skb, verdict.reason, verdict.action)
+			update_log(skb, verdict.reason, verdict.action);
 		}
 
 		return verdict.action;
@@ -160,7 +160,7 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 				{
 					verdict.action = NF_DROP;
 					verdict.reason = REASON_COULDNT_UPDATE_CHECKSUM;
-					update_log(skb, verdict.reason, verdict.action)
+					update_log(skb, verdict.reason, verdict.action);
 				}
 			}
 
