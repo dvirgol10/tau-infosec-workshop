@@ -55,6 +55,6 @@ char *tcp_conn_type_to_s(tcp_conn_type_t type);
 void print_metadata(conn_entry_metadata_t metadata);
 
 // prints entire connection table entry, as needed for "show_conns" command
-void print_conn_entry(conn_entry_t* conn_entry);
+void print_conn_entry(conn_entry_t *conn_entry);
 
 #endif // _USER_PRINT_H_

@@ -204,6 +204,9 @@ void print_reason(reason_t reason)
 		case REASON_ALREADY_HAS_CONN_ENTRY:
 			printf("REASON_ALREADY_HAS_CONN_ENTRY ");
 			return;
+		case REASON_COULDNT_UPDATE_CHECKSUM:
+			printf("REASON_COULDNT_UPDATE_CHECKSUM ");
+			return;
 		}
 		print_error_message_and_exit("There is some reason which isn't valid");
 	}

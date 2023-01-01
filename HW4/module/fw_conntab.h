@@ -44,12 +44,12 @@ conn_entry_metadata_t *retrieve_matching_metadata_of_packet(struct sk_buff *skb)
 conn_entry_metadata_t create_conn_metadata(struct sk_buff *skb, __be32 original_src_ip, __be16 original_src_port, int from_http_client, int from_ftp_client);
 
 // forge tcp packets which have been caught in the pre-routing hook
-void forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server);
+int forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server);
 
 // forge tcp packets which have been caught in the local-out hook
-void forge_lo_tcp_packet(struct sk_buff *skb, conn_entry_metadata_t *p_metadata, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server);
+int forge_lo_tcp_packet(struct sk_buff *skb, conn_entry_metadata_t *p_metadata, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server);
 
 // update the checksum of the forged packet
-void update_checksum(struct sk_buff *skb);
+int update_checksum(struct sk_buff *skb);
 
 #endif // _FW_CONNTAB_H_

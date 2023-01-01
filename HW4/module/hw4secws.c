@@ -79,7 +79,12 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		verdict = match_conn_entries(skb, 1); // we match the packet to a connection entry (and there we also update the state)
 
 		// forge the packet before sending it
-		forge_lo_tcp_packet(skb, p_metadata, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
+		if (!forge_lo_tcp_packet(skb, p_metadata, from_http_client, from_http_server, from_ftp_client, from_ftp_server))
+		{
+			verdict.action = NF_DROP;
+			verdict.reason = REASON_COULDNT_UPDATE_CHECKSUM;
+			update_log(skb, verdict.reason, verdict.action)
+		}
 
 		return verdict.action;
 	}
@@ -151,7 +156,12 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 			// if the packet is a HTTP or FTP packet we have to forge it to redirect it to one of our proxy programs
 			if (from_http_client || from_http_server || from_ftp_client || from_ftp_server)
 			{
-				forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server);
+				if (!forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server))
+				{
+					verdict.action = NF_DROP;
+					verdict.reason = REASON_COULDNT_UPDATE_CHECKSUM;
+					update_log(skb, verdict.reason, verdict.action)
+				}
 			}
 
 			verdict = match_conn_entries(skb, 1); // we match the packet to a connection entry (and there we also update the state)
@@ -170,8 +180,13 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 				{
 					// we create an initial metadata structure for the new packet
 					metadata = create_conn_metadata(skb, original_src_ip, original_src_port, from_http_client, from_ftp_client);
-					forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server); // after that we forge it
-					if (get_packet_syn(skb))
+
+					if (!forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server)) // after that we forge it
+					{
+						verdict.action = NF_DROP;
+						verdict.reason = REASON_COULDNT_UPDATE_CHECKSUM;
+					}
+					else if (get_packet_syn(skb))
 					{ // if this is a TCP packet we want to update the dynamic connection table appropriately
 						if (!update_conn_tab_with_new_connection(skb, metadata))
 						{ // if the update has failed, meaning if there was already such connection between the endpoints
@@ -205,7 +220,7 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 	}
 
 	if (is_loopback(skb))
-	{ // we accept any loopback packet without logging it // TODO maybe remove this because now we look for loopback packets
+	{ // we accept any loopback packet without logging it
 		return NF_ACCEPT;
 	}
 
@@ -516,7 +531,7 @@ int __init init_module_firewall(void)
 	retval = register_lo_hook();
 	if (retval < 0)
 	{
-		printk(KERN_INFO "Failed to register the pr hook");
+		printk(KERN_INFO "Failed to register the lo hook");
 		unregister_pr_hook();
 		cleanup();
 		return retval;

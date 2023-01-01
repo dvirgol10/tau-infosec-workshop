@@ -97,7 +97,6 @@ conn_entry_node *find_matching_conn_entry_node(__be32 src_ip, __be16 src_port, _
 }
 
 // update the tcp state of a connection entry
-// TODO remove printk in submittion
 int update_conn_entry_state(conn_entry_node *conn_node, __be32 src_ip, __be16 src_port, __be32 dst_ip, __be16 dst_port, __u16 pkt_syn, __u16 pkt_fin, __u16 pkt_rst)
 {
 	conn_entry_t *p_conn_entry = &conn_node->conn_entry;
@@ -107,7 +106,6 @@ int update_conn_entry_state(conn_entry_node *conn_node, __be32 src_ip, __be16 sr
 	if (pkt_rst)
 	{
 		remove_conn_node(conn_node); // remove the conn_node from the dynamic connection table because RESET connection has been sent
-		printk(KERN_INFO "RST");
 	}
 
 	switch (p_conn_entry->state)
@@ -115,7 +113,7 @@ int update_conn_entry_state(conn_entry_node *conn_node, __be32 src_ip, __be16 sr
 	case WAITING_TO_START:
 		if (is_client && pkt_syn)
 		{
-			printk(KERN_INFO "WAITING_TO_START -> SYN_RECEIVED\n");
+			// "WAITING_TO_START -> SYN_RECEIVED
 			p_conn_entry->state = SYN_RECEIVED;
 			return 1;
 		}
@@ -123,13 +121,13 @@ int update_conn_entry_state(conn_entry_node *conn_node, __be32 src_ip, __be16 sr
 	case SYN_RECEIVED:
 		if (is_server && pkt_syn)
 		{
-			printk(KERN_INFO "SYN_RECEIVED -> SYN_ACK_RECEIVED\n");
+			// "SYN_RECEIVED -> SYN_ACK_RECEIVED
 			p_conn_entry->state = SYN_ACK_RECEIVED;
 			return 1;
 		}
 		if (is_client && pkt_syn)
 		{
-			printk(KERN_INFO "SYN_RECEIVED -> SYN_RECEIVED\n");
+			// "SYN_RECEIVED -> SYN_RECEIVED\n")
 			return 1;
 		}
 		break;
@@ -137,19 +135,19 @@ int update_conn_entry_state(conn_entry_node *conn_node, __be32 src_ip, __be16 sr
 		if (is_client)
 		{
 			p_conn_entry->state = ESTABLISHED;
-			printk(KERN_INFO "SYN_ACK_RECEIVED -> ESTABLISHED\n");
+			// "SYN_ACK_RECEIVED -> ESTABLISHED
 			return 1;
 		}
 		break;
 	case ESTABLISHED:
 		if (!pkt_fin)
 		{
-			printk(KERN_INFO "ESTABLISHED -> ESTABLISHED\n");
+			// "ESTABLISHED -> ESTABLISHED
 			return 1;
 		}
 		else
 		{
-			printk(KERN_INFO "ESTABLISHED -> FIN_1_RECEIVED\n");
+			// "ESTABLISHED -> FIN_1_RECEIVED
 			p_conn_entry->state = FIN_1_RECEIVED;
 			// Now the initiator of the FIN is treated as client and the other side as server
 			p_conn_entry->src_ip = src_ip;
@@ -160,23 +158,22 @@ int update_conn_entry_state(conn_entry_node *conn_node, __be32 src_ip, __be16 sr
 		}
 		break;
 	case FIN_1_RECEIVED:
-		printk(KERN_INFO "I am in FIN_1_RECEIVED is_client=%d fin=%d\n", is_client, pkt_fin);
 		if (is_server && pkt_fin)
 		{
-			printk(KERN_INFO "FIN_1_RECEIVED -> FIN_2_RECEIVED\n");
+			// "FIN_1_RECEIVED -> FIN_2_RECEIVED
 			p_conn_entry->state = FIN_2_RECEIVED;
 			return 1;
 		}
 		if (is_client && pkt_fin)
 		{
-			printk(KERN_INFO "FIN_1_RECEIVED -> FIN_1_RECEIVED\n");
+			// "FIN_1_RECEIVED -> FIN_1_RECEIVED
 			return 1;
 		}
 		break;
 	case FIN_2_RECEIVED:
 		if (is_client)
 		{
-			printk(KERN_INFO "FIN_2_RECEIVED -> CLOSED\n");
+			// "FIN_2_RECEIVED -> CLOSED
 			remove_conn_node(conn_node); // remove the conn_node from the dynamic connection table because there is no more connection between the two endopints
 			return 1;
 		}
@@ -206,8 +203,6 @@ verdict_t match_conn_entries(struct sk_buff *skb, int to_update_log)
 	{
 		verdict.action = NF_DROP;
 		verdict.reason = REASON_NO_MATCHING_CONN_ENTRY;
-		printk(KERN_INFO "========1===========\n");
-		printk(KERN_INFO "%d %d %d %d", src_ip, src_port, dst_ip, dst_port);
 	}
 	else
 	{ // if we found a matching connection entry, we try to update its state. If the packet doesn't match to the state we drop the packet
@@ -220,8 +215,6 @@ verdict_t match_conn_entries(struct sk_buff *skb, int to_update_log)
 		{
 			verdict.action = NF_DROP;
 			verdict.reason = REASON_NO_MATCHING_CONN_ENTRY;
-			printk(KERN_INFO "========2===========\n");
-			printk(KERN_INFO "%d %d %d %d", src_ip, src_port, dst_ip, dst_port);
 		}
 	}
 	if (to_update_log)
@@ -252,7 +245,7 @@ __u16 get_packet_rst(struct sk_buff *skb)
 }
 
 // forge tcp packets which have been caught in the local-out hook
-void forge_lo_tcp_packet(struct sk_buff *skb, conn_entry_metadata_t *p_metadata, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server)
+int forge_lo_tcp_packet(struct sk_buff *skb, conn_entry_metadata_t *p_metadata, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server)
 {
 	if (from_http_client || from_ftp_client) // if we got the packet from our fake client in the proxy, we need to replace the source address with the real client's source address
 	{
@@ -269,11 +262,11 @@ void forge_lo_tcp_packet(struct sk_buff *skb, conn_entry_metadata_t *p_metadata,
 		tcp_hdr(skb)->source = FTP_PORT_BE;
 	}
 
-	update_checksum(skb); // update the checksum of the forged packet
+	return update_checksum(skb); // update the checksum of the forged packet
 }
 
 // forge tcp packets which have been caught in the pre-routing hook
-void forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server)
+int forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server)
 {
 	if (from_http_client) // if we got the packet from the http client, we redirect it to http proxy
 	{
@@ -294,11 +287,11 @@ void forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_htt
 		ip_hdr(skb)->daddr = FAKE_CLIENT_ADDR_BE;
 	}
 
-	update_checksum(skb); // update the checksum of the forged packet
+	return update_checksum(skb); // update the checksum of the forged packet
 }
 
 // update the checksum of the forged packet
-void update_checksum(struct sk_buff *skb)
+int update_checksum(struct sk_buff *skb)
 {
 	struct iphdr *ip_header = ip_hdr(skb);
 	struct tcphdr *tcp_header;
@@ -311,7 +304,7 @@ void update_checksum(struct sk_buff *skb)
 
 	if (skb_linearize(skb) < 0)
 	{
-		// TODO handle error
+		return 0;
 	}
 
 	ip_header = ip_hdr(skb);
@@ -319,9 +312,9 @@ void update_checksum(struct sk_buff *skb)
 	tcplen = (ntohs(ip_header->tot_len) - ((ip_header->ihl) << 2));
 	tcp_header->check = 0;
 	tcp_header->check = tcp_v4_check(tcplen, ip_header->saddr, ip_header->daddr, csum_partial((char *)tcp_header, tcplen, 0));
+	return 1;
 }
 
-// TODO maybe we don't need the "original" args
 conn_entry_metadata_t create_conn_metadata(struct sk_buff *skb, __be32 original_src_ip, __be16 original_src_port, int from_http_client, int from_ftp_client)
 {
 	conn_entry_metadata_t metadata;
