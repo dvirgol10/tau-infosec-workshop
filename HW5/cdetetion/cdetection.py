@@ -18,7 +18,7 @@ def is_c_code(data, threshold):
     for pattern in special_patterns:
         patterns_count += len(re.findall(pattern, data))
     
-    code_percent = (keywords_count + tokens_count + patterns_count) / len(data.split())
+    code_percent = (keywords_count + tokens_count + patterns_count) / float(len(data.split()))
 
     return code_percent >= threshold
 
@@ -42,13 +42,13 @@ def main():
     arr_num_correct_answers = []
     precision = 1000
     for i in range(precision):
-        threshold = i / precision
+        threshold = i / float(precision)
         arr_num_correct_answers.append(calculate_num_correct_answers(threshold)) 
 
     print(arr_num_correct_answers)
     max_value = max(arr_num_correct_answers)
     index = arr_num_correct_answers.index(max_value)
-    threshold = index / precision
+    threshold = index / float(precision)
     print(threshold)
 
 
