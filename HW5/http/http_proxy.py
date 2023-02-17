@@ -21,16 +21,17 @@ class Metadata(ctypes.Structure):
 
 MetadataSize = ctypes.sizeof(Metadata)
 
-# decide whether we should block the http response or not (we block it if its content-type header contains "text/csv" or "application/zip")
+# decide whether we should block the http response or not (we block it if its Host header contains "'" or ";" or "|")
 def block_response(message):
-    first_index = message.find("Content-type") # calculate the beginning of the header
+    first_index = message.find("Host") # calculate the beginning of the header
     if first_index == -1:
         return False
     second_index = message[first_index:].find("\r\n") # calculate the end of the header
     if second_index == -1:
         return False
     second_index += first_index
-    if "text/csv" in message[first_index : second_index] or "application/zip" in message[first_index : second_index]:
+    host_value = message[first_index : second_index]
+    if "'" in host_value or ";" in host_value or "|" in host_value:
         return True
     return False
    
