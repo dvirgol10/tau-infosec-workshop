@@ -3,7 +3,7 @@ import re
 keywords = ['auto', 'break', 'case', 'char', 'const', 'continue', 'default', 'do', 'double', 'else', 'enum', 'extern', 'float', 'for', 'goto', 'if', 'int', 'long', 'register', 'return', 'short', 'signed', 'sizeof', 'static', 'struct', 'switch', 'typedef', 'union', 'unsigned', 'void', 'volatile', 'while']
 keywords += ['printf', 'malloc', 'pragma', '#include', '#define', '#undef', '#if', '#ifdef', '#ifndef', '#error', '__FILE__', '__LINE__', '__DATE__', '__TIME__', '__TIMESTAMP__']
 
-special_tokens = r"[\{\}\[\]\(\);,\^\#\&\*\-\+\<\>\|]"
+special_tokens = r"[\{\}\[\]\(\);,\^\#\&\*\-\+\|]"
 
 special_patterns = [r"\(\)", r"\-\>", r"\/\/", r"\/\*", r"\*\/", r"\&\&", r"\|\|", r"\=\=", r"\!\=", r"\>\=", r"\<\=", r"\>\>", r"\<\<", r"\\n"]
 

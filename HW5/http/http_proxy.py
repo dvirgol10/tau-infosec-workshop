@@ -4,6 +4,7 @@ import socket
 import struct
 import thread
 import ctypes
+import re
 
 clients = [] # a list contains all of the sockets
 
@@ -21,8 +22,30 @@ class Metadata(ctypes.Structure):
 
 MetadataSize = ctypes.sizeof(Metadata)
 
-# decide whether we should block the http response or not (we block it if its Host header contains "'" or ";" or "|")
-def block_response(message):
+keywords = ['auto', 'break', 'case', 'char', 'const', 'continue', 'default', 'do', 'double', 'else', 'enum', 'extern', 'float', 'for', 'goto', 'if', 'int', 'long', 'register', 'return', 'short', 'signed', 'sizeof', 'static', 'struct', 'switch', 'typedef', 'union', 'unsigned', 'void', 'volatile', 'while']
+keywords += ['printf', 'malloc', 'pragma', '#include', '#define', '#undef', '#if', '#ifdef', '#ifndef', '#error', '__FILE__', '__LINE__', '__DATE__', '__TIME__', '__TIMESTAMP__']
+
+special_tokens = r"[\{\}\[\]\(\);,\^\#\&\*\-\+\|]"
+
+special_patterns = [r"\(\)", r"\-\>", r"\/\/", r"\/\*", r"\*\/", r"\&\&", r"\|\|", r"\=\=", r"\!\=", r"\>\=", r"\<\=", r"\>\>", r"\<\<", r"\\n"]
+
+def is_c_code(data, threshold):
+    keywords_count = 0
+    for keyword in keywords:
+        keywords_count += len(re.findall(r"\b{}b".format(keyword), data))
+
+    tokens_count = len(re.findall(special_tokens, data))
+
+    patterns_count = 0
+    for pattern in special_patterns:
+        patterns_count += len(re.findall(pattern, data))
+    
+    code_percent = (keywords_count + tokens_count + patterns_count) / float(len(data.split()))
+
+    return code_percent >= threshold
+
+
+def block_response_due_to_vuln(message):
     first_index = message.find("Host") # calculate the beginning of the header
     if first_index == -1:
         return False
@@ -34,6 +57,17 @@ def block_response(message):
     if "'" in host_value or ";" in host_value or "|" in host_value:
         return True
     return False
+
+
+def block_response_due_to_c_code(message):
+    if "\r\n\r\n" not in message:
+        return False
+    return is_c_code(message.split("\r\n\r\n", 1)[-1], 0.25) # determine whether the body of the response is C code
+
+# decide whether we should block the http response or not (we block it if its Host header contains "'" or ";" or "|", or if its body is c code)
+def block_response(message):
+    return block_response_due_to_vuln(message) or block_response_due_to_c_code(message)
+
    
 # function which is being called on every message received: here we send it to the other side,
 # with a small exception: if our receiving socket is that of the server, meaning we got a response, we check if we need to block it.
@@ -43,9 +77,8 @@ def onmessage(client, message, i, server, isclient):
     else:
         print("Server #{} Sent Message: {}".format(i, message.decode()))
 
-    if not isclient:
-        if block_response(message.decode()):
-            return
+    if block_response(message.decode()):
+        return
 
     server.send(message)
 
