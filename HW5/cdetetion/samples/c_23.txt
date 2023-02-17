@@ -1,0 +1,22 @@
+#include <stdio.h>
+
+int main() {
+    int n;
+    printf("Enter a positive integer: ");
+    scanf("%d", &n);
+    int is_palindrome = 1, temp = n, reversed = 0;
+    while (temp > 0) {
+        int digit = temp % 10;
+        reversed = reversed * 10 + digit;
+        temp /= 10;
+    }
+    if (n != reversed) {
+        is_palindrome = 0;
+    }
+    if (is_palindrome) {
+        printf("%d is a palindrome.\n", n);
+    } else {
+        printf("%d is not a palindrome.\n", n);
+    }
+    return 0;
+}

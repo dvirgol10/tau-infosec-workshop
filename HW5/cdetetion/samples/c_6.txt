@@ -1,0 +1,9 @@
+#include <time.h>
+#include <stdlib.h>
+
+int main() {
+    srand(time(NULL));
+    int n = rand() % 10 + 1;
+    printf("Random number: %d\n", n);
+    return 0;
+}

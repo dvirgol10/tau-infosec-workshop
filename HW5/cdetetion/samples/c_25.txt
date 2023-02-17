@@ -1,0 +1,13 @@
+#include <stdio.h>
+
+int main() {
+    int n, m;
+    printf("Enter two positive integers: ");
+    scanf("%d %d", &n, &m);
+    int remainder = n;
+    while (remainder >= m) {
+        remainder -= m;
+    }
+    printf("The remainder of %d and %d is %d.\n", n, m, remainder);
+    return 0;
+}

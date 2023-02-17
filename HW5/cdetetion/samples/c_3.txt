@@ -1,0 +1,8 @@
+#include <math.h>
+
+int main() {
+    double x = 3.14159;
+    double y = sqrt(x);
+    printf("The square root of %f is %f\n", x, y);
+    return 0;
+}

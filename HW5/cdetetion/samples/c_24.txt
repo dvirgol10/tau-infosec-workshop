@@ -1,0 +1,14 @@
+#include <stdio.h>
+
+int main() {
+    int n, m;
+    printf("Enter two positive integers: ");
+    scanf("%d %d", &n, &m);
+    int quotient = 0;
+    while (n >= m) {
+        n -= m;
+        quotient++;
+    }
+    printf("The quotient of %d and %d is %d.\n", n, m, quotient);
+    return 0;
+}
