@@ -265,6 +265,8 @@ char *tcp_conn_type_to_s(tcp_conn_type_t type)
 		return "HTTP";
 	case TCP_CONN_FTP:
 		return "FTP";
+	case TCP_CONN_SMTP:
+		return "SMTP";
 	case TCP_CONN_OTHER:
 		return "OTHER";
 	}

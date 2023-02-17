@@ -60,6 +60,8 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		int from_http_server = my_src_port == HTTP_MITM_PORT_BE;
 		int from_ftp_client = my_dst_port == FTP_PORT_BE;
 		int from_ftp_server = my_src_port == FTP_MITM_PORT_BE;
+		int from_smtp_client = my_dst_port == SMTP_PORT_BE;
+		int from_smtp_server = my_src_port == SMTP_MITM_PORT_BE;
 		conn_entry_metadata_t *p_metadata = retrieve_matching_metadata_of_packet(skb);
 
 		if (!p_metadata) // if we don't have a matching metadata structure for the packet we need to drop it
@@ -71,6 +73,7 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		{
 		case TCP_CONN_HTTP:
 		case TCP_CONN_FTP:
+		case TCP_CONN_SMTP:
 			break;
 		case TCP_CONN_OTHER:
 			return NF_ACCEPT; // we don't need to forge a TCP packet other than HTTP and FTP
@@ -79,7 +82,7 @@ unsigned int lo_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		verdict = match_conn_entries(skb, 1); // we match the packet to a connection entry (and there we also update the state)
 
 		// forge the packet before sending it
-		if (!forge_lo_tcp_packet(skb, p_metadata, from_http_client, from_http_server, from_ftp_client, from_ftp_server))
+		if (!forge_lo_tcp_packet(skb, p_metadata, from_http_client, from_http_server, from_ftp_client, from_ftp_server, from_smtp_client, from_smtp_server))
 		{
 			verdict.action = NF_DROP;
 			verdict.reason = REASON_COULDNT_UPDATE_CHECKSUM;
@@ -149,14 +152,16 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		int from_http_server = original_src_port == HTTP_PORT_BE;
 		int from_ftp_client = original_dst_port == FTP_PORT_BE;
 		int from_ftp_server = original_src_port == FTP_PORT_BE;
+		int from_smtp_client = original_dst_port == SMTP_PORT_BE;
+		int from_smtp_server = original_src_port == SMTP_PORT_BE;
 		conn_entry_metadata_t metadata;
 
 		if (get_packet_ack(skb))
 		{
-			// if the packet is a HTTP or FTP packet we have to forge it to redirect it to one of our proxy programs
-			if (from_http_client || from_http_server || from_ftp_client || from_ftp_server)
+			// if the packet is a HTTP or FTP or SMTP packet we have to forge it to redirect it to one of our proxy programs
+			if (from_http_client || from_http_server || from_ftp_client || from_ftp_server || from_smtp_client || from_smtp_server)
 			{
-				if (!forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server))
+				if (!forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server, from_smtp_client, from_smtp_server))
 				{
 					verdict.action = NF_DROP;
 					verdict.reason = REASON_COULDNT_UPDATE_CHECKSUM;
@@ -169,7 +174,7 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 		}
 		else // if we don't have an ack in the packet, meaning it's a SYN packet
 		{
-			if (from_http_client || from_ftp_client) // if the packet is from http or ftp client we need to redirect it to the proxy and create the appropriate connection table entries for the forged connections
+			if (from_http_client || from_ftp_client || from_smtp_client) // if the packet is from http or ftp or smtp client we need to redirect it to the proxy and create the appropriate connection table entries for the forged connections
 			{
 				verdict = match_rules(skb, pkt_direction, 0); // we first check if in according to the rules we need to drop or accept the packet
 				if (verdict.action == NF_DROP)
@@ -179,9 +184,9 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 				else
 				{
 					// we create an initial metadata structure for the new packet
-					metadata = create_conn_metadata(skb, original_src_ip, original_src_port, from_http_client, from_ftp_client);
+					metadata = create_conn_metadata(skb, original_src_ip, original_src_port, from_http_client, from_ftp_client, from_smtp_client);
 
-					if (!forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server)) // after that we forge it
+					if (!forge_pr_tcp_packet(skb, from_http_client, from_http_server, from_ftp_client, from_ftp_server, from_smtp_client, from_smtp_server)) // after that we forge it
 					{
 						verdict.action = NF_DROP;
 						verdict.reason = REASON_COULDNT_UPDATE_CHECKSUM;
@@ -203,7 +208,7 @@ unsigned int pr_handle_packet(void *priv, struct sk_buff *skb, const struct nf_h
 					return verdict.action;
 				}
 			}
-			else // if the packet isn't a HTTP or FTP packet
+			else // if the packet isn't a HTTP or FTP or SMTP packet
 			{
 				verdict = match_conn_entries(skb, 0); // we first check if the SYN packet has an entry in the connection table. In this case it means that this is a packet for our forged connection of the proxy, or the syn packet is for the data connection of FTP
 				if (verdict.action == NF_ACCEPT)

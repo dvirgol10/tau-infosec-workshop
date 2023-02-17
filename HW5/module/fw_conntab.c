@@ -63,7 +63,7 @@ int update_conn_tab_with_new_connection(struct sk_buff *skb, conn_entry_metadata
 
 	add_conn_entry(src_ip, src_port, dst_ip, dst_port, SYN_RECEIVED, metadata);
 	if (metadata.type != TCP_CONN_OTHER)
-	{ // if we have a "special" TCP connection (HTTP or FTP) we add a connection entry with our proxy as a source and the real server as the destination.
+	{ // if we have a "special" TCP connection (HTTP or FTP or SMTP) we add a connection entry with our proxy as a source and the real server as the destination.
 	  // at first the source port is invalid (0), in the future we will update it with proxy information which he writes to the module
 		add_conn_entry(FAKE_CLIENT_ADDR_BE, 0, metadata.server_ip, metadata.server_port, WAITING_TO_START, metadata);
 	}
@@ -245,9 +245,9 @@ __u16 get_packet_rst(struct sk_buff *skb)
 }
 
 // forge tcp packets which have been caught in the local-out hook
-int forge_lo_tcp_packet(struct sk_buff *skb, conn_entry_metadata_t *p_metadata, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server)
+int forge_lo_tcp_packet(struct sk_buff *skb, conn_entry_metadata_t *p_metadata, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server, int from_smtp_client, int from_smtp_server)
 {
-	if (from_http_client || from_ftp_client) // if we got the packet from our fake client in the proxy, we need to replace the source address with the real client's source address
+	if (from_http_client || from_ftp_client || from_smtp_client) // if we got the packet from our fake client in the proxy, we need to replace the source address with the real client's source address
 	{
 		ip_hdr(skb)->saddr = p_metadata->client_ip;
 	}
@@ -262,11 +262,17 @@ int forge_lo_tcp_packet(struct sk_buff *skb, conn_entry_metadata_t *p_metadata, 
 		tcp_hdr(skb)->source = FTP_PORT_BE;
 	}
 
+	if (from_smtp_server) // if we got the packet from our fake smtp server in the proxy, we need to replace the source address with the real server's source address and also the port (to 25)
+	{
+		ip_hdr(skb)->saddr = p_metadata->server_ip;
+		tcp_hdr(skb)->source = SMTP_PORT_BE;
+	}
+
 	return update_checksum(skb); // update the checksum of the forged packet
 }
 
 // forge tcp packets which have been caught in the pre-routing hook
-int forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server)
+int forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server, int from_smtp_client, int from_smpt_server)
 {
 	if (from_http_client) // if we got the packet from the http client, we redirect it to http proxy
 	{
@@ -286,7 +292,15 @@ int forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_http
 	{
 		ip_hdr(skb)->daddr = FAKE_CLIENT_ADDR_BE;
 	}
-
+	if (from_smtp_client) // if we got the packet from the smtp client, we redirect it to smtp proxy
+	{
+		ip_hdr(skb)->daddr = FAKE_SERVER_ADDR_BE;
+		tcp_hdr(skb)->dest = SMTP_MITM_PORT_BE;
+	}
+	if (from_smtp_server) // if we got the packet from the smtp server, we redirect it to the smtp proxy only by changing the dest address because the dest port is already of the proxy
+	{
+		ip_hdr(skb)->daddr = FAKE_CLIENT_ADDR_BE;
+	}
 	return update_checksum(skb); // update the checksum of the forged packet
 }
 
@@ -315,7 +329,7 @@ int update_checksum(struct sk_buff *skb)
 	return 1;
 }
 
-conn_entry_metadata_t create_conn_metadata(struct sk_buff *skb, __be32 original_src_ip, __be16 original_src_port, int from_http_client, int from_ftp_client)
+conn_entry_metadata_t create_conn_metadata(struct sk_buff *skb, __be32 original_src_ip, __be16 original_src_port, int from_http_client, int from_ftp_client, int from_smtp_client)
 {
 	conn_entry_metadata_t metadata;
 	metadata.client_ip = original_src_ip;
@@ -332,6 +346,10 @@ conn_entry_metadata_t create_conn_metadata(struct sk_buff *skb, __be32 original_
 	else if (from_ftp_client)
 	{
 		metadata.type = TCP_CONN_FTP;
+	}
+	else if (from_smtp_client)
+	{
+		metadata.type = TCP_CONN_SMTP;
 	}
 	else
 	{

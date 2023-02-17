@@ -55,9 +55,11 @@ typedef enum
 #define RULE_TABLE_SIZE (MAX_RULES * sizeof(rule_t))
 #define HTTP_PORT_BE (20480)		   // 20480 is 80 in BE
 #define FTP_PORT_BE (5376)			   // 5376 is 21 in BE
+#define SMTP_PORT_BE (6400)			   // 6400 is 25 in BE
 #define HTTP_MITM_PORT_BE (8195)	   // 8195 is 800 in BE
 #define FTP_MITM_PORT_BE (53760)	   // 53760 is 210 in BE
 #define FTP_DATA_SRC_PORT (5120)	   // 5120 is 20 in BE
+#define SMTP_MITM_PORT_BE (64000)	   // 64000 is 250 in BE
 #define LOOPBACK_ADDR_BE (16777343)	   // 16777343 is "127.0.0.1" in BE, 255 is "255.0.0.0" in BE
 #define FAKE_SERVER_ADDR_BE (50397450) // 50397450 is "10.1.1.3"
 #define FAKE_CLIENT_ADDR_BE (50462986) // 50462986 is "10.1.2.3"
@@ -138,7 +140,8 @@ typedef enum
 {
 	TCP_CONN_HTTP = 0,
 	TCP_CONN_FTP = 1,
-	TCP_CONN_OTHER = 2,
+	TCP_CONN_SMTP = 2,
+	TCP_CONN_OTHER = 3,
 } tcp_conn_type_t;
 
 typedef struct

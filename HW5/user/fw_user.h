@@ -127,7 +127,8 @@ typedef enum
 {
 	TCP_CONN_HTTP = 0,
 	TCP_CONN_FTP = 1,
-	TCP_CONN_OTHER = 2,
+	TCP_CONN_SMTP = 2,
+	TCP_CONN_OTHER = 3,
 } tcp_conn_type_t;
 
 typedef struct
