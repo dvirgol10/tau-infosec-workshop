@@ -7,7 +7,7 @@ import ctypes
 
 clients = [] # a list contains all of the sockets
 
-(TCP_CONN_HTTP, TCP_CONN_FTP, TCP_CONN_OTHER) = (0, 1, 2) # enum-like valuse for tcp connection type
+(TCP_CONN_HTTP, TCP_CONN_FTP, TCP_CONN_SMTP, TCP_CONN_OTHER) = (0, 1, 2, 3) # enum-like valuse for tcp connection type
 
 # Object representing the conn_entry_metadata_t structure of the kernel module
 class Metadata(ctypes.Structure):
@@ -69,7 +69,7 @@ def create_forged_connection_with_real_server(client, i):
         for i in range(0, len(metadata_array), MetadataSize):
             metadata = Metadata.from_buffer(bytearray(metadata_array[i:i+MetadataSize]))
             # if we find a metadata entry which matches the current connection with the real client, we break because this is the metadata entry we should update
-            if metadata.conn_type == TCP_CONN_HTTP and client.getpeername() == (socket.inet_ntoa(struct.pack('I', metadata.client_ip)), socket.ntohs(metadata.client_port)):
+            if metadata.conn_type == TCP_CONN_FTP and client.getpeername() == (socket.inet_ntoa(struct.pack('I', metadata.client_ip)), socket.ntohs(metadata.client_port)):
                 break
         
         metadata.forged_client_port = socket.htons(server.getsockname()[1]) # we update the forged client source port for the connection with the real server        

@@ -272,7 +272,7 @@ int forge_lo_tcp_packet(struct sk_buff *skb, conn_entry_metadata_t *p_metadata, 
 }
 
 // forge tcp packets which have been caught in the pre-routing hook
-int forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server, int from_smtp_client, int from_smpt_server)
+int forge_pr_tcp_packet(struct sk_buff *skb, int from_http_client, int from_http_server, int from_ftp_client, int from_ftp_server, int from_smtp_client, int from_smtp_server)
 {
 	if (from_http_client) // if we got the packet from the http client, we redirect it to http proxy
 	{

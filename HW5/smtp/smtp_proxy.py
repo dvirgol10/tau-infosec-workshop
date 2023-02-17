@@ -21,19 +21,9 @@ class Metadata(ctypes.Structure):
 
 MetadataSize = ctypes.sizeof(Metadata)
 
-# decide whether we should block the http response or not (we block it if its Host header contains "'" or ";" or "|")
+# decide whether we should block the smtp response or not (we block it if has C code in it)
 def block_response(message):
-    first_index = message.find("Host") # calculate the beginning of the header
-    if first_index == -1:
-        return False
-    second_index = message[first_index:].find("\r\n") # calculate the end of the header
-    if second_index == -1:
-        return False
-    second_index += first_index
-    host_value = message[first_index : second_index]
-    if "'" in host_value or ";" in host_value or "|" in host_value:
-        return True
-    return False
+    return False #TODO implement
    
 # function which is being called on every message received: here we send it to the other side,
 # with a small exception: if our receiving socket is that of the server, meaning we got a response, we check if we need to block it.
@@ -68,7 +58,7 @@ def create_forged_connection_with_real_server(client, i):
         for i in range(0, len(metadata_array), MetadataSize):
             metadata = Metadata.from_buffer(bytearray(metadata_array[i:i+MetadataSize]))
             # if we find a metadata entry which matches the current connection with the real client, we break because this is the metadata entry we should update
-            if metadata.conn_type == TCP_CONN_HTTP and client.getpeername() == (socket.inet_ntoa(struct.pack('I', metadata.client_ip)), socket.ntohs(metadata.client_port)):
+            if metadata.conn_type == TCP_CONN_FTP and client.getpeername() == (socket.inet_ntoa(struct.pack('I', metadata.client_ip)), socket.ntohs(metadata.client_port)):
                 break
         
         metadata.forged_client_port = socket.htons(server.getsockname()[1]) # we update the forged client source port for the connection with the real server        
@@ -144,7 +134,7 @@ def run(proxy):
 def main():
     proxy = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     proxy.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    proxy.bind(('0.0.0.0', 800)) # we bind the socket to port 800 because we redirect packets with destination port 80 to port 800
+    proxy.bind(('0.0.0.0', 250)) # we bind the socket to port 250 because we redirect packets with destination port 25 to port 250
     proxy.listen(5)
     run(proxy)
 
