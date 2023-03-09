@@ -30,6 +30,8 @@ special_tokens = r"[\{\}\[\]\(\);,\^\#\&\*\-\+\|]"
 special_patterns = [r"\(\)", r"\-\>", r"\/\/", r"\/\*", r"\*\/", r"\&\&", r"\|\|", r"\=\=", r"\!\=", r"\>\=", r"\<\=", r"\>\>", r"\<\<", r"\\n"]
 
 def is_c_code(data, threshold):
+    if len(data.split()) == 0:
+        return False
     keywords_count = 0
     for keyword in keywords:
         keywords_count += len(re.findall(r"\b{}b".format(keyword), data))
